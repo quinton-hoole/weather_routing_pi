@@ -1,7 +1,7 @@
 Weather Routing Plugin for OpenCPN
 ===========================================
 
-Perform weather routing, see the file [data/WeatherRoutingInformation.html](data/WeatherRoutingInformation.html).
+Perform weather routing, see [data/WeatherRoutingInformation.html](data/WeatherRoutingInformation.html).
 
 Compiling
 =========
