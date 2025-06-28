@@ -64,6 +64,7 @@ cmake \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET} \
   -DOCPN_TARGET_TUPLE="darwin-wx32;10;universal" \
   -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+  -DOCPN_BUILD_TEST=ON \
   ..
 
 if [[ -z "$CI" ]]; then
@@ -74,7 +75,7 @@ fi
 
 # non-reproducible error on first invocation, seemingly tarball-conf-stamp
 # is not created as required.
-make package || make package
+make -j12 && make test && make package || make package
 
 # Create the cached /usr/local archive
 if [ -n "$CI"  ]; then

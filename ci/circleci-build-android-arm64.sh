@@ -88,8 +88,7 @@ cmake -DCMAKE_TOOLCHAIN_FILE=cmake/android-aarch64-toolchain.cmake \
   -DQt_Build=build_arm64/qtbase \
   -DOCPN_Android_Common=OCPNAndroidCommon-master \
   -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+  -DOCPN_BUILD_TEST=ON \
   ..
 
-make VERBOSE=1
-
-make package
+make -j12 VERBOSE=1 && make test && make package

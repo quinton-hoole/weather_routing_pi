@@ -53,11 +53,12 @@ tag=$(git tag --contains HEAD)
 current_branch=$(git branch --show-current)
 
 if [ -n "$tag" ] || [ "$current_branch" = "master" ]; then
-  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
+  cmake -DOCPN_BUILD_TEST=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
 else
-  cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr/local ..
+  cmake -DOCPN_BUILD_TEST=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr/local ..
 fi
 
-make -j2
+make -j12
+make test
 make package
 ls -l

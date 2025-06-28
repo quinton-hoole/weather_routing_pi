@@ -8,6 +8,7 @@ set -xe
 su -c "dnf install -y sudo dnf-plugins-core"
 sudo dnf builddep  -y ci/opencpn-fedora.spec
 rm -rf build; mkdir build; cd build
-cmake ..
-make -j2
+cmake -DOCPN_BUILD_TEST=ON ..
+make -j12
+make test
 make package

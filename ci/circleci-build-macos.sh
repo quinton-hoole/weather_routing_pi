@@ -90,9 +90,11 @@ cmake \
   -DCMAKE_INSTALL_PREFIX=app/files \
   -DBUILD_TYPE_PACKAGE:STRING=tarball \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
+  -DOCPN_BUILD_TEST=ON \
   "/" \
   ..
-make
+make -j12
+make test
 make install
 make package
 
