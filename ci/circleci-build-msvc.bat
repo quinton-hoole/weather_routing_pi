@@ -56,6 +56,7 @@ cmake -T v141_xp -G "Visual Studio 16 2019" ^
     -DCMAKE_BUILD_TYPE=%CONFIGURATION% ^
     -DwxWidgets_LIB_DIR=%wxWidgets_LIB_DIR% ^
     -DwxWidgets_ROOT_DIR=%wxWidgets_ROOT_DIR% ^
+    -DOCPN_BUILD_TEST=ON ^
     ..
 ) else (
 cmake -A Win32 -G "Visual Studio 17 2022" ^
@@ -63,6 +64,7 @@ cmake -A Win32 -G "Visual Studio 17 2022" ^
     -DCMAKE_BUILD_TYPE=%CONFIGURATION% ^
     -DwxWidgets_LIB_DIR=%wxWidgets_LIB_DIR% ^
     -DwxWidgets_ROOT_DIR=%wxWidgets_ROOT_DIR% ^
+    -DOCPN_BUILD_TEST=ON ^
     ..
 )
 
@@ -73,4 +75,5 @@ dir
 echo Build for windows
 
 :cmake --build . --target tarball --config %CONFIGURATION%
+cmake --build . --target test --config %CONFIGURATION%
 cmake --build . --target package --config %CONFIGURATION%
