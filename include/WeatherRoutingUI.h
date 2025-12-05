@@ -1109,8 +1109,10 @@ protected:
 
 public:
   wxTextCtrl* m_tName;
-  wxTextCtrl* m_tLatitude;
-  wxTextCtrl* m_tLongitude;
+  wxTextCtrl* m_tLatitudeDegrees;
+  wxTextCtrl* m_tLatitudeMinutes;
+  wxTextCtrl* m_tLongitudeDegrees;
+  wxTextCtrl* m_tLongitudeMinutes;
 
   NewPositionDialog(wxWindow* parent, wxWindowID id = wxID_ANY,
                     const wxString& title = _("Edit Weather Routing Position"),
