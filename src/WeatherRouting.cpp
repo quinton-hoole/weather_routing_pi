@@ -560,19 +560,12 @@ void WeatherRouting::OnLeftDown(wxMouseEvent& event) {
 void WeatherRouting::OnLeftUp(wxMouseEvent& event) { m_tDownTimer.Stop(); }
 
 void WeatherRouting::OnDownTimer(wxTimerEvent&) {
-  int flags = wxLIST_HITTEST_NOWHERE | wxLIST_HITTEST_ONITEM;
-  if (m_panel->m_lWeatherRoutes->HitTest(m_downPos, flags) != wxNOT_FOUND)
-    m_panel->m_lWeatherRoutes->PopupMenu(m_mContextMenu, m_downPos);
-  else
-    m_panel->m_lPositions->PopupMenu(m_mContextMenuPositions, m_downPos);
+  m_panel->m_lWeatherRoutes->PopupMenu(m_mContextMenu, m_downPos);
 }
 
 void WeatherRouting::OnRightUp(wxMouseEvent& event) {
   if (event.GetEventObject() == m_panel->m_lWeatherRoutes)
     m_panel->m_lWeatherRoutes->PopupMenu(m_mContextMenu, event.GetPosition());
-  else
-    m_panel->m_lPositions->PopupMenu(m_mContextMenuPositions,
-                                     event.GetPosition());
 }
 
 void WeatherRouting::CopyDataFiles(wxString from, wxString to) {
