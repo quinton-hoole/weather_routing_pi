@@ -23,6 +23,8 @@
  ***************************************************************************
  */
 
+#include <cstdint>
+
 #include <wx/wx.h>
 
 #include "weather_routing_pi.h"

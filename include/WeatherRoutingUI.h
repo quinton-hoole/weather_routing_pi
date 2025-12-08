@@ -8,49 +8,49 @@
 #pragma once
 
 #include <wx/artprov.h>
-#include <wx/xrc/xmlres.h>
-#include <wx/intl.h>
-#include <wx/string.h>
 #include <wx/bitmap.h>
-#include <wx/image.h>
-#include <wx/icon.h>
-#include <wx/menu.h>
-#include <wx/gdicmn.h>
-#include <wx/font.h>
-#include <wx/colour.h>
-#include <wx/settings.h>
-#include <wx/frame.h>
-#include <wx/listctrl.h>
-#include <wx/sizer.h>
-#include <wx/statbox.h>
-#include <wx/panel.h>
 #include <wx/button.h>
-#include <wx/gauge.h>
-#include <wx/splitter.h>
-#include <wx/stattext.h>
-#include <wx/clrpicker.h>
-#include <wx/spinctrl.h>
 #include <wx/checkbox.h>
-#include <wx/scrolwin.h>
 #include <wx/checklst.h>
-#include <wx/dialog.h>
+#include <wx/choice.h>
+#include <wx/clrpicker.h>
+#include <wx/colour.h>
 #include <wx/combobox.h>
 #include <wx/datectrl.h>
 #include <wx/dateevt.h>
-#include <wx/timectrl.h>
-#include <wx/textctrl.h>
-#include <wx/choice.h>
-#include <wx/valtext.h>
-#include <wx/notebook.h>
-#include <wx/slider.h>
-#include <wx/radiobut.h>
-#include <wx/statline.h>
-#include <wx/html/htmlwin.h>
-#include <wx/listbox.h>
-#include <wx/valgen.h>
+#include <wx/dialog.h>
+#include <wx/font.h>
+#include <wx/frame.h>
+#include <wx/gauge.h>
+#include <wx/gdicmn.h>
 #include <wx/grid.h>
+#include <wx/html/htmlwin.h>
+#include <wx/icon.h>
+#include <wx/image.h>
+#include <wx/intl.h>
+#include <wx/listbox.h>
+#include <wx/listctrl.h>
+#include <wx/menu.h>
+#include <wx/notebook.h>
+#include <wx/panel.h>
+#include <wx/radiobut.h>
+#include <wx/scrolwin.h>
+#include <wx/settings.h>
+#include <wx/sizer.h>
+#include <wx/slider.h>
+#include <wx/spinctrl.h>
+#include <wx/splitter.h>
+#include <wx/statbox.h>
+#include <wx/statline.h>
+#include <wx/stattext.h>
+#include <wx/string.h>
+#include <wx/textctrl.h>
+#include <wx/timectrl.h>
+#include <wx/valgen.h>
+#include <wx/valtext.h>
+#include <wx/xrc/xmlres.h>
 
-#include "wxWTranslateCatalog.h"
+// #include "wxWTranslateCatalog.h"
 
 /**
  * Base class for the Weather Routing plugin's main interface.
@@ -503,7 +503,7 @@ public:
       wxWindow* parent, wxWindowID id = wxID_ANY,
       const wxString& title = _("Weather Routing Configuration"),
       const wxPoint& pos = wxDefaultPosition,
-      const wxSize& size = wxSize(-1, -1), 
+      const wxSize& size = wxSize(-1, -1),
       long style = wxDEFAULT_DIALOG_STYLE | wxMAXIMIZE_BOX | wxMINIMIZE_BOX);
   ~ConfigurationDialogBase();
 };
