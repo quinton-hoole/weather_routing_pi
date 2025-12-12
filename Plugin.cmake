@@ -176,4 +176,8 @@ macro(add_plugin_libraries)
 
   add_subdirectory(opencpn-libs/libtess2)
   target_link_libraries(${PACKAGE_NAME} ocpn::libtess2)
+
+  add_subdirectory(opencpn-libs/zlib)
+  target_link_libraries(${PACKAGE_NAME} ocpn::zlib)
+
 endmacro ()
