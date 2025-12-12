@@ -180,9 +180,14 @@ bool weather_routing_pi::DeInit() {
   return true;
 }
 
-int weather_routing_pi::GetAPIVersionMajor() { return OCPN_API_VERSION_MAJOR; }
+int weather_routing_pi::GetAPIVersionMajor() { return 1; }
 
-int weather_routing_pi::GetAPIVersionMinor() { return OCPN_API_VERSION_MINOR; }
+int weather_routing_pi::GetAPIVersionMinor() {
+  std::string v(API_VERSION);
+  size_t dotpos = v.find('.');
+  return atoi(v.substr(dotpos + 1).c_str());
+}
+
 
 int weather_routing_pi::GetPlugInVersionMajor() { return PLUGIN_VERSION_MAJOR; }
 
@@ -201,14 +206,14 @@ int weather_routing_pi::GetPlugInVersionPost() { return PLUGIN_VERSION_TWEAK; }
 wxBitmap* weather_routing_pi::GetPlugInBitmap() { return &m_panelBitmap; }
 // End of shipdriver process
 
-wxString weather_routing_pi::GetCommonName() { return PLUGIN_COMMON_NAME; }
+wxString weather_routing_pi::GetCommonName() { return PLUGIN_API_NAME; }
 
 wxString weather_routing_pi::GetShortDescription() {
-  return _(PLUGIN_SHORT_DESCRIPTION);
+  return _(PKG_SUMMARY);
 }
 
 wxString weather_routing_pi::GetLongDescription() {
-  return _(PLUGIN_LONG_DESCRIPTION);
+  return _(PKG_DESCRIPTION);
 }
 
 void weather_routing_pi::SetDefaults() {}
@@ -226,11 +231,11 @@ void weather_routing_pi::SetCursorLatLon(double lat, double lon) {
 
 bool weather_routing_pi::WarnAboutPluginVersion(
   const std::string plugin_name,
-  int version_major, int version_minor, 
-  int min_major, int min_minor, 
-  int max_major, int max_minor,    
+  int version_major, int version_minor,
+  int min_major, int min_minor,
+  int max_major, int max_minor,
   const std::string consequence_msg,
-  const std::string recommended_version_msg_prefix, 
+  const std::string recommended_version_msg_prefix,
   const std::string version_msg_suffix)
 {
   int version = 1000 * version_major + version_minor,
@@ -243,9 +248,9 @@ bool weather_routing_pi::WarnAboutPluginVersion(
         << version_major << '.'<< version_minor << ' '
         << _("is not officially supported.") << std::endl << std::endl
         << recommended_version_msg_prefix << ' '
-        << min_major << '.' << min_minor << " - " 
+        << min_major << '.' << min_minor << " - "
         << max_major << '.' << max_minor
-        << consequence_msg;      
+        << consequence_msg;
 
     wxMessageDialog mdlg(
         m_parent_window,

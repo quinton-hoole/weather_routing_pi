@@ -3,28 +3,12 @@ Weather Routing Plugin for OpenCPN
 
 Perform weather routing, see "data/WeatherRoutingInformation.html"
 
-Compiling
-=========
+Copyright  and License
+======================
+The files under src/  are Copyright (c)  Sean D'Epagnier 2016 - 2018
+and distributed using a GPL version 3 license. Other files uses 
+multitude of GPL compatible licenses, see the source files.
 
-* git clone git://github.com/rgleason/weather_routing_pi.git
-
-Under windows, you must find the file "opencpn.lib" (Visual Studio) or "libopencpn.dll.a" (mingw) which is built in the build directory after compiling opencpn.  This file must be copied to the plugin directory.
-
-Build as normally:
-
-* cd ..
-* cd build
-* cmake ..
-* make
-* make install
-
-For OSX standalone build in weather_routing_pi directory:
-
-* mkdir build
-* cd build
-* cmake ..
-* make
-* make create-pkg
 
 Unit Testing
 ============
