@@ -48,7 +48,7 @@ StatisticsDialog::StatisticsDialog(wxWindow* parent)
 #endif
 {
   SetRouteMapOverlays(std::list<RouteMapOverlay*>());
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   wxSize sz = ::wxGetDisplaySize();
   SetSize(0, 0, sz.x, sz.y - 40);
 #endif

@@ -118,7 +118,7 @@ BoatDialog::BoatDialog(WeatherRouting& weatherrouting)
   wxFileConfig* pConf = GetOCPNConfigObject();
   pConf->SetPath(_T( "/PlugIns/WeatherRouting/BoatDialog" ));
 
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   wxSize sz = ::wxGetDisplaySize();
   SetSize(0, 0, sz.x, sz.y - 40);
 #else
@@ -1270,7 +1270,7 @@ void BoatDialog::OnUpPolar(wxCommandEvent& event) {
   long index = SelectedPolar();
   if (index < 1) return;
 
-#ifndef __OCPN__ANDROID__
+#ifndef __ANDROID__
   m_Boat.Polars.insert(m_Boat.Polars.begin() + index - 1,
                        m_Boat.Polars.at(index));
   m_Boat.Polars.erase(m_Boat.Polars.begin() + index + 1);
@@ -1285,7 +1285,7 @@ void BoatDialog::OnDownPolar(wxCommandEvent& event) {
   long index = SelectedPolar();
   if (index < 0 || index + 1 >= (long)m_Boat.Polars.size()) return;
 
-#ifndef __OCPN__ANDROID__
+#ifndef __ANDROID__
   m_Boat.Polars.insert(m_Boat.Polars.begin() + index + 2,
                        m_Boat.Polars.at(index));
   m_Boat.Polars.erase(m_Boat.Polars.begin() + index);
@@ -1388,7 +1388,7 @@ void BoatDialog::OnRemovePolar(wxCommandEvent& event) {
 
   while ((index = m_lPolars->GetNextItem(index, wxLIST_NEXT_ALL,
                                          wxLIST_STATE_SELECTED)) != -1) {
-#ifndef __OCPN__ANDROID__
+#ifndef __ANDROID__
     m_Boat.Polars.erase(m_Boat.Polars.begin() + index - count++);
 #endif
     lastindex = index;

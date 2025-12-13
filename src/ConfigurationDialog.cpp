@@ -57,7 +57,7 @@ ConfigurationDialog::ConfigurationDialog(WeatherRouting& weatherrouting)
   wxFileConfig* pConf = GetOCPNConfigObject();
   pConf->SetPath(_T( "/PlugIns/WeatherRouting" ));
 
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   wxSize sz = ::wxGetDisplaySize();
   SetSize(0, 0, sz.x, sz.y - 40);
 #else
@@ -199,7 +199,7 @@ void ConfigurationDialog::OnBoatFilename(wxCommandEvent& event) {
 
 #define SET_SPIN_DOUBLE(FIELD) SET_SPIN_DOUBLE_VALUE(FIELD, (*it).FIELD)
 
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
 #define NO_EDITED_CONTROLS 1
 #else
 #define NO_EDITED_CONTROLS 0

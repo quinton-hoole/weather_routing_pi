@@ -225,7 +225,7 @@ WeatherRouting::WeatherRouting(wxWindow* parent, weather_routing_pi& plugin)
   int confVersion;
   pConf->Read("ConfigVersion", &confVersion, 0);
 
-#ifndef __OCPN__ANDROID__
+#ifndef __ANDROID__
   if (confVersion < PLUGIN_VERSION_MAJOR * 100 + PLUGIN_VERSION_MINOR) {
     wxString title = _("New or updated data available");
     wxString message =
@@ -279,7 +279,7 @@ WeatherRouting::WeatherRouting(wxWindow* parent, weather_routing_pi& plugin)
   pConf->SetPath(
       "/PlugIns/WeatherRouting");  // path can change after modal dialog
   pConf->Read("DisableColPane", &m_disable_colpane, false);
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   m_disable_colpane = true;
 #endif
 
@@ -326,7 +326,7 @@ WeatherRouting::WeatherRouting(wxWindow* parent, weather_routing_pi& plugin)
   m_size = GetSize();
   pConf->Read(_T ( "DialogWidth" ), &m_size.x, wxMax(m_size.x, 100));
   pConf->Read(_T ( "DialogHeight" ), &m_size.y, wxMax(m_size.y, 100));
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   wxSize sz = ::wxGetDisplaySize();
   m_size.x = sz.x * 3 / 5;
   m_size.y = sz.y * 2 / 5;
@@ -414,7 +414,7 @@ WeatherRouting::WeatherRouting(wxWindow* parent, weather_routing_pi& plugin)
       wxEVT_COMMAND_BUTTON_CLICKED,
       wxCommandEventHandler(WeatherRouting::OnExportRouteAsGPX), NULL, this);
 
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   GetHandle()->setAttribute(Qt::WA_AcceptTouchEvents);
   GetHandle()->grabGesture(Qt::PanGesture);
   GetHandle()->setStyleSheet(qtStyleSheet);
@@ -523,7 +523,7 @@ WeatherRouting::~WeatherRouting() {
   }
 }
 
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
 void WeatherRouting::OnEvtPanGesture(wxQT_PanGestureEvent& event) {
   switch (event.GetState()) {
     case GestureStarted:
@@ -667,7 +667,7 @@ void WeatherRouting::Render(piDC& dc, PlugIn_ViewPort& vp) {
   }
 
   if (!dc.GetDC()) {
-#ifndef __OCPN__ANDROID__
+#ifndef __ANDROID__
     glPushAttrib(GL_LINE_BIT | GL_ENABLE_BIT | GL_HINT_BIT);  // Save state
     glEnable(GL_LINE_SMOOTH);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -708,7 +708,7 @@ void WeatherRouting::Render(piDC& dc, PlugIn_ViewPort& vp) {
 
   m_ConfigurationBatchDialog.Render(dc, vp);
 
-#ifndef __OCPN__ANDROID__
+#ifndef __ANDROID__
   if (!dc.GetDC()) glPopAttrib();
 #endif
 }

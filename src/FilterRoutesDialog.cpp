@@ -53,7 +53,7 @@ FilterRoutesDialog::FilterRoutesDialog(WeatherRouting* weatherrouting)
       m_WeatherRouting(weatherrouting) {
   for (int i = 0; i < NUM_FILTERS; i++) m_cCategory->Append(FilterNames[i]);
   m_cCategory->SetSelection(0);
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   wxSize sz = ::wxGetDisplaySize();
   SetSize(0, 0, sz.x, sz.y - 40);
 #endif
