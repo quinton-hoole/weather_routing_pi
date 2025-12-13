@@ -9,6 +9,9 @@ The files under src/  are Copyright (c)  Sean D'Epagnier 2016 - 2018
 and distributed using a GPL version 3 license. Other files uses 
 multitude of GPL compatible licenses, see the source files.
 
+Building and Installing
+=======================
+See [INSTALL](INSTALL.md)
 
 Unit Testing
 ============
