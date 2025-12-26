@@ -13,16 +13,16 @@
 # -------- Options ----------
 
 set(OCPN_TEST_REPO
-    "opencpn/shipdriver-alpha"
+    "quinton/weather_routing_pi-alpha"
     CACHE STRING "Default repository for untagged builds"
 )
 set(OCPN_BETA_REPO
-    "opencpn/shipdriver-beta"
+    "quinton/weather_routing_pi-beta"
     CACHE STRING
     "Default repository for tagged builds matching 'beta'"
 )
 set(OCPN_RELEASE_REPO
-    "opencpn/shipdriver-prod"
+    "quinton/weather_routing_pi-prod"
     CACHE STRING
     "Default repository for tagged builds not matching 'beta'"
 )
