@@ -44,7 +44,7 @@ AboutDialog::AboutDialog(wxWindow* parent) : AboutDialogBase(parent) {
       _T("%d.%d.%d.%d"), PLUGIN_VERSION_MAJOR, PLUGIN_VERSION_MINOR,
       PLUGIN_VERSION_PATCH, PLUGIN_VERSION_TWEAK));
 
-#ifdef __OCPN__ANDROID__
+#ifdef __ANDROID__
   wxSize sz = ::wxGetDisplaySize();
   SetSize(0, 0, sz.x, sz.y - 40);
 #endif
