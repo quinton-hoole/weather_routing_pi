@@ -318,11 +318,13 @@ workflows:
       - build-macos-intel-legacy:
           <<: *std-filters      
       
-      - build-android-arm64:
-          <<: *std-filters
+      # Disable Android builds until they are fixed.
+      # See https://github.com/quinton-hoole/weather_routing_pi/pull/15
+      # - build-android-arm64:
+      #     <<: *std-filters
 
-      - build-android-armhf:
-          <<: *std-filters
+      # - build-android-armhf:
+      #     <<: *std-filters
 
       - build-bullseye-wx32:
           <<: *std-filters
