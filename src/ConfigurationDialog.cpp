@@ -291,6 +291,7 @@ void ConfigurationDialog::SetConfigurations(
   SET_SPIN(MaxSearchAngle);
   SET_SPIN(MaxTrueWindKnots);
   SET_SPIN(MaxApparentWindKnots);
+  SET_SPIN(MaxCAPE);
 
   SET_SPIN_DOUBLE(MaxSwellMeters);
   SET_SPIN(MaxLatitude);
@@ -360,7 +361,10 @@ void ConfigurationDialog::OnResetAdvanced(wxCommandEvent& event) {
   m_sMaxCourseAngle->SetValue(180);
   m_sMaxSearchAngle->SetValue(120);
   m_cbAvoidCycloneTracks->SetValue(false);
-  // XXX missing 2
+  m_sMaxTrueWindKnots->SetValue(50);
+  m_sMaxApparentWindKnots->SetValue(50);
+  m_sMaxSwellMeters->SetValue(20.0);
+  m_sMaxCAPE->SetValue(1000);
 
   // Options
   m_cbInvertedRegions->SetValue(false);
@@ -531,6 +535,7 @@ void ConfigurationDialog::Update() {
     GET_SPIN(MaxSearchAngle);
     GET_SPIN(MaxTrueWindKnots);
     GET_SPIN(MaxApparentWindKnots);
+    GET_SPIN(MaxCAPE);
 
     GET_SPIN(MaxSwellMeters);
     GET_SPIN(MaxLatitude);

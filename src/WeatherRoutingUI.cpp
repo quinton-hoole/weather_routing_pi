@@ -1357,6 +1357,29 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
   m_staticText129->Wrap(-1);
   fgSizer110->Add(m_staticText129, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
+  m_staticTextCAPE = new wxStaticText(sbConstraints->GetStaticBox(), wxID_ANY,
+                                     _("Max CAPE") /* MaxCAPE */,
+                                     wxDefaultPosition, wxDefaultSize, 0);
+  m_staticTextCAPE->Wrap(-1);
+  fgSizer110->Add(m_staticTextCAPE, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+  m_sMaxCAPE = new wxSpinCtrl(
+      sbConstraints->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+      wxSize(-1, -1), wxSP_ARROW_KEYS, 0, 10000, 1000);
+  m_sMaxCAPE->SetToolTip(
+      _("Maximum Convective Available Potential Energy (CAPE) to allow during routing.\n"
+        "Routes with CAPE above this value will be avoided."));
+  m_sMaxCAPE->SetMaxSize(wxSize(140, -1));
+
+  fgSizer110->Add(m_sMaxCAPE, 1,
+                  wxALL | wxEXPAND | wxALIGN_CENTER_VERTICAL, 3);
+
+  m_staticTextCAPEUnit =
+      new wxStaticText(sbConstraints->GetStaticBox(), wxID_ANY, _("J/kg"),
+                       wxDefaultPosition, wxDefaultSize, 0);
+  m_staticTextCAPEUnit->Wrap(-1);
+  fgSizer110->Add(m_staticTextCAPEUnit, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
   sbConstraints->Add(fgSizer110, 1, wxEXPAND, 5);
 
   fgSizer83->Add(sbConstraints, 1, wxEXPAND | wxALL, 5);
@@ -2284,6 +2307,12 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
   m_sMaxApparentWindKnots->Connect(
       wxEVT_COMMAND_SPINCTRL_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
+  m_sMaxCAPE->Connect(
+      wxEVT_MOTION, wxMouseEventHandler(ConfigurationDialogBase::EnableSpin),
+      NULL, this);
+  m_sMaxCAPE->Connect(
+      wxEVT_COMMAND_SPINCTRL_UPDATED,
+      wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
   m_sMaxSwellMeters->Connect(
       wxEVT_LEFT_DOWN,
       wxMouseEventHandler(ConfigurationDialogBase::EnableSpinDouble), NULL,
@@ -2896,6 +2925,12 @@ ConfigurationDialogBase::~ConfigurationDialogBase() {
       wxEVT_MOTION, wxMouseEventHandler(ConfigurationDialogBase::EnableSpin),
       NULL, this);
   m_sMaxApparentWindKnots->Disconnect(
+      wxEVT_COMMAND_SPINCTRL_UPDATED,
+      wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
+  m_sMaxCAPE->Disconnect(
+      wxEVT_MOTION, wxMouseEventHandler(ConfigurationDialogBase::EnableSpin),
+      NULL, this);
+  m_sMaxCAPE->Disconnect(
       wxEVT_COMMAND_SPINCTRL_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
   m_sMaxSwellMeters->Disconnect(

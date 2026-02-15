@@ -398,3 +398,15 @@ bool ConstraintChecker::CheckWindVsCurrentConstraint(
   }
   return true;
 }
+
+bool ConstraintChecker::CheckMaxCAPEConstraint(
+    RouteMapConfiguration& configuration, double cape,
+    PropagationError& error_code) {
+  wxLogMessage("CheckMaxCAPEConstraint: cape=%f, configuration.MaxCAPE=%f", cape, configuration.MaxCAPE);
+  if (cape > configuration.MaxCAPE) {
+    wxLogMessage("CAPE constraint FAILED: %f > %f", cape, configuration.MaxCAPE);
+    error_code = PROPAGATION_EXCEEDED_MAX_CAPE;
+    return false;
+  }
+  return true;
+}

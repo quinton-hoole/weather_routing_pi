@@ -314,6 +314,13 @@ struct RouteMapConfiguration {
    * route calculation will fail.
    */
   double MaxSwellMeters;
+  /**
+   * The calculated route will avoid areas where the CAPE is above this value in
+   * Joules/kg.
+   *
+   * If the grib data does not contain CAPE information, this value is ignored.
+   */
+  double MaxCAPE;
 
   /**
    * The calculated route will not go beyond this latitude, as an absolute
@@ -769,6 +776,8 @@ public:
     return ret;
   }
 
+  PropagationError GetLastPropagationError() { return m_lastPropagationError; }
+
   static wxString GetWeatherForecastStatusMessage(WeatherForecastStatus status);
 
   /**
@@ -975,6 +984,8 @@ protected:
     if (configuration.land_crossing) m_bLandCrossing = true;
   }
 
+  void UpdatePropagationError();
+
   virtual void Clear();
   /**
    * Reduces a list of routes by merging overlapping ones.
@@ -1035,9 +1046,12 @@ protected:
   WR_GribRecordSet* m_NewGrib;
 
 private:
-  /** Helper method to collect errors from a position and its parents. */
-  void CollectPositionErrors(Position* position,
-                             std::vector<Position*>& failed_positions);
+  /** Helper method to collect errors and counts from the latest isochrone. */
+  void GetPropagationErrorCounts(
+      std::map<PropagationError, int>& counts,
+      std::vector<Position*>* failed_positions = nullptr) const;
+
+  void UpdatePropagationError();
 
   RouteMapConfiguration m_Configuration;
   bool m_bFinished, m_bValid;
@@ -1069,6 +1083,14 @@ private:
    * light or strong for the available data.
    */
   PolarSpeedStatus m_bPolarStatus;
+  /**
+   * Stores the last error encountered during the propagation phase of routing.
+   *
+   * This variable contains an enum value from PropagationError indicating
+   * issues such as no valid routes found, or other failures during the
+   * isochrone generation process.
+   */
+  PropagationError m_lastPropagationError;
   /**  */
   wxString m_bGribError;
   bool m_bLandCrossing;

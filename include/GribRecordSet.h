@@ -23,6 +23,9 @@
 #include "GribRecord.h"
 
 // These are indexes into the array
+// Note: The order of entries in this enum MUST match the binary layout
+// of the shared memory structure in grib_pi. Any changes here MUST
+// be synchronized with grib_pi/src/GribRecordSet.h to avoid data corruption.
 enum {
   Idx_WIND_VX,
   Idx_WIND_VX850,

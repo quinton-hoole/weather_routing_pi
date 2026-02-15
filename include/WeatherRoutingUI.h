@@ -405,6 +405,9 @@ protected:
   wxStaticText* m_staticText27;
   wxSpinCtrlDouble* m_sMaxSwellMeters;
   wxStaticText* m_staticText129;
+  wxStaticText* m_staticTextCAPE;
+  wxSpinCtrl* m_sMaxCAPE;
+  wxStaticText* m_staticTextCAPEUnit;
   /** The end point of the route. */
   wxComboBox* m_cEnd;
   wxSpinCtrl* m_sTimeStepHours;

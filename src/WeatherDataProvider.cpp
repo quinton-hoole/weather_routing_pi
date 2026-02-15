@@ -36,12 +36,16 @@ extern wxString g_ReceivedMessage;
 
 static Json::Value RequestGRIB(const wxDateTime& t, const wxString& what,
                                double lat, double lon) {
+  wxLogMessage("RequestGRIB START: what=%s, lat=%f, lon=%f", what, lat, lon);
   Json::Value error;
   Json::Value v;
   Json::FastWriter writer;
   // brain dead wx is expecting time in local time
   wxDateTime time = t.FromUTC();
-  if (!time.IsValid()) return error;
+  if (!time.IsValid()) {
+    wxLogMessage("RequestGRIB: Invalid time!");
+    return error;
+  }
 
   v["Day"] = time.GetDay();
   v["Month"] = time.GetMonth();
@@ -54,10 +58,15 @@ static Json::Value RequestGRIB(const wxDateTime& t, const wxString& what,
   v["Type"] = "Request";
   v["Msg"] = "GRIB_VALUES_REQUEST";
   v["lat"] = lat;
-  v["lon"] = lon;
+  // Normalize longitude to -180..180 for GRIB plugin compatibility
+  double lon_norm = lon;
+  while (lon_norm > 180) lon_norm -= 360;
+  while (lon_norm < -180) lon_norm += 360;
+  v["lon"] = lon_norm;
   v[what] = 1;
 
   SendPluginMessage("GRIB_VALUES_REQUEST", writer.write(v));
+
   if (g_ReceivedMessage != wxEmptyString &&
       g_ReceivedJSONMsg["Type"].asString() == "Reply") {
     return g_ReceivedJSONMsg;
@@ -435,14 +444,50 @@ double WeatherDataProvider::GetWeatherParameter(
   if (!grib) return returnOnEmpty;
 
   // Try to retrieve the data from local GRIB
-  GribRecord* grh = grib->m_GribRecordPtrArray[gribIndex];
-  if (!grh) return returnOnEmpty;
+  GribRecord* grh = nullptr;
+  if (gribIndex >= 0 && gribIndex < Idx_COUNT) {
+    grh = grib->m_GribRecordPtrArray[gribIndex];
+  }
 
-  double value = grh->getInterpolatedValue(lon, lat, true);
-  if (value == GRIB_NOTDEF) return returnOnEmpty;
-
-  return postProcessFn ? postProcessFn(value) : value;
-}
+   if (!grh) {
+     // If the parameter is missing (like CAPE might be due to binary mismatch),
+     // try to fetch it via JSON request. To avoid excessive slowness during routing,
+     // we use a very basic point cache.
+     static std::map<wxString, double> s_cape_cache;
+     static wxDateTime s_last_time;
+     if (s_last_time != configuration.time) {
+       s_cape_cache.clear();
+       s_last_time = configuration.time;
+     }
+ 
+     wxString key = wxString::Format("%.2f:%.2f", lat, lon);
+      if (s_cape_cache.count(key)) {
+        wxLogMessage("%s Cache HIT (lat=%f, lon=%f): %f", requestKey, lat, lon, s_cape_cache[key]);
+        return s_cape_cache[key];
+      }
+  
+      wxLogMessage("%s Cache MISS - Requesting JSON (lat=%f, lon=%f)", requestKey, lat, lon);
+      Json::Value r = RequestGRIB(configuration.time, requestKey, lat, lon);
+      if (r.isMember(requestKey)) {
+         double value = r[requestKey].asDouble();
+         if (postProcessFn) value = postProcessFn(value);
+         s_cape_cache[key] = value;
+         wxLogMessage("%s JSON Result (lat=%f, lon=%f): %f", requestKey, lat, lon, value);
+         return value;
+      }
+      wxLogMessage("%s JSON Result EMPTY (lat=%f, lon=%f)", requestKey, lat, lon);
+      return returnOnEmpty;
+    }
+  
+    double value = grh->getInterpolatedValue(lon, lat, true);
+    if (value == GRIB_NOTDEF) {
+      wxLogMessage("%s GRIB Result NOTDEF (lat=%f, lon=%f)", requestKey, lat, lon);
+      return returnOnEmpty;
+    }
+  
+    wxLogMessage("%s GRIB Result (lat=%f, lon=%f): %f", requestKey, lat, lon, value);
+   return postProcessFn ? postProcessFn(value) : value;
+ }
 
 /**
  * Return the swell height at the specified lat/long location.

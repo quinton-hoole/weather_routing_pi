@@ -52,8 +52,12 @@ enum PropagationError {
   PROPAGATION_BOUNDARY_INTERSECTION = 13,
   /** Cyclone track crossing detected during propagation. */
   PROPAGATION_CYCLONE_TRACK_CROSSING = 14,
+  /** CAPE exceeds maximum value at position. */
+  PROPAGATION_EXCEEDED_MAX_CAPE = 15,
   /** Propagation angle error. */
-  PROPAGATION_ANGLE_ERROR = 15
+  PROPAGATION_ANGLE_OUTSIDE_SEARCH_ANGLE = 16,
+  /** No valid angles found. */
+  PROPAGATION_ANGLE_ERROR = 17
 };
 
 /**
@@ -182,6 +186,9 @@ public:
                                            double currentSpeed,
                                            double currentDir,
                                            PropagationError& error_code);
+
+  static bool CheckMaxCAPEConstraint(RouteMapConfiguration& configuration,
+                                     double cape, PropagationError& error_code);
 };
 
 // Land cache management functions
