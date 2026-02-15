@@ -69,6 +69,7 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <algorithm>
 
 #include "Utilities.h"
 #include "Boat.h"
