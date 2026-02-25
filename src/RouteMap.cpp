@@ -101,6 +101,7 @@ RouteMapConfiguration::RouteMapConfiguration()
       MotorSpeed(5.0),
       StartLon(0),
       EndLon(0),
+      MaxCAPE(1000.0),
       grib(nullptr),
       grib_is_data_deficient(false) {}
 
@@ -214,7 +215,7 @@ OD_FindClosestBoundaryLineCrossing RouteMap::ODFindClosestBoundaryLineCrossing =
 
 std::list<RouteMapPosition> RouteMap::Positions;
 
-RouteMap::RouteMap() {}
+RouteMap::RouteMap() : m_lastPropagationError(PROPAGATION_NO_ERROR) {}
 
 RouteMap::~RouteMap() { Clear(); }
 
@@ -387,6 +388,7 @@ bool RouteMap::Propagate() {
   } else {
     // No further propagation possible, but we may still have a useful partial
     // route Mark as finished but indicate destination wasn't reached
+    UpdatePropagationError();
     SetFinished(false);
   }
 
@@ -420,30 +422,17 @@ double RouteMap::DetermineDeltaTime() {
     // Get the last isochrone
     IsoChron* lastIsochron = origin.back();
 
-    // Count positions and failed propagations for adaptive time step.
-    int totalPositions = 0;
-    int failedPropagations = 0;
-
     for (IsoRouteList::iterator it = lastIsochron->routes.begin();
          it != lastIsochron->routes.end(); ++it) {
       const Position* pos = (*it)->skippoints->point;
       do {
-        totalPositions++;
-
-        // If this position failed to propagate (has no child positions in the
-        // next isochrone) We'd need a way to track this information
-        if (pos->propagation_error != PROPAGATION_NO_ERROR &&
-            pos->propagation_error != PROPAGATION_ALREADY_PROPAGATED) {
-          failedPropagations++;
-        }
-
-        double distFromSource =
-            DistGreatCircle(pos->lat, pos->lon, m_Configuration.StartLat,
-                            m_Configuration.StartLon);
+        // Source distance for start reduction
+        double d2Start =
+            pos->Distance(m_Configuration.StartLat, m_Configuration.StartLon);
         double distToDest = DistGreatCircle(
             pos->lat, pos->lon, m_Configuration.EndLat, m_Configuration.EndLon);
         minDistToEnd = std::min(minDistToEnd, distToDest);
-        maxDistFromStart = std::max(maxDistFromStart, distFromSource);
+        maxDistFromStart = std::max(maxDistFromStart, d2Start);
         pos = pos->next;
       } while (pos != (*it)->skippoints->point);
     }
@@ -539,6 +528,7 @@ void RouteMap::Reset() {
   m_bGribError = wxEmptyString;
   m_bFinished = false;
   m_bLandCrossing = false;
+  m_lastPropagationError = PROPAGATION_NO_ERROR;
   m_bBoundaryCrossing = false;
 
   Unlock();
@@ -578,33 +568,33 @@ void RouteMap::SetNewGrib(GribRecordSet* grib) {
   /* copy the grib record set */
   m_NewGrib = new WR_GribRecordSet(bogus_ID /* XXX */);
   m_NewGrib->m_Reference_Time = grib->m_Reference_Time;
-  for (int i = 0; i < Idx_COUNT; i++) {
-    switch (i) {
-      case Idx_HTSIGW:  // significant wave height
-      case Idx_WVDIR:   // wave direction
-      case Idx_WVPER:   // wave period
-      case Idx_WIND_GUST:
-      case Idx_WIND_VX:
-      case Idx_WIND_VY:
-      case Idx_SEACURRENT_VX:
-      case Idx_SEACURRENT_VY:
-      case Idx_AIR_TEMP:
-      case Idx_CAPE:
-      case Idx_CLOUD_TOT:
-      case Idx_HUMID_RE:
-      case Idx_PRECIP_TOT:
-      case Idx_SEA_TEMP:
-      case Idx_PRESSURE:
-      case Idx_COMP_REFL:
-        if (grib->m_GribRecordPtrArray[i]) {
-          m_NewGrib->SetUnRefGribRecord(
-              i, new GribRecord(*grib->m_GribRecordPtrArray[i]));
-        }
-        break;
-      default:
-        break;
-    }
-  }
+   for (int i = 0; i < Idx_COUNT; i++) {
+     switch (i) {
+       case Idx_HTSIGW:  // significant wave height
+       case Idx_WVDIR:   // wave direction
+       case Idx_WVPER:   // wave period
+       case Idx_WIND_GUST:
+       case Idx_WIND_VX:
+       case Idx_WIND_VY:
+       case Idx_SEACURRENT_VX:
+       case Idx_SEACURRENT_VY:
+       case Idx_AIR_TEMP:
+       case Idx_CLOUD_TOT:
+       case Idx_HUMID_RE:
+       case Idx_PRECIP_TOT:
+       case Idx_SEA_TEMP:
+       case Idx_PRESSURE:
+       case Idx_COMP_REFL:
+       case Idx_CAPE:
+         if (grib->m_GribRecordPtrArray[i]) {
+           m_NewGrib->SetUnRefGribRecord(
+               i, new GribRecord(*grib->m_GribRecordPtrArray[i]));
+         }
+         break;
+       default:
+         break;
+     }
+   }
   m_SharedNewGrib.SetGribRecordSet(m_NewGrib);
 }
 
@@ -628,23 +618,31 @@ void RouteMap::SetNewGrib(WR_GribRecordSet* grib) {
   /* copy the grib record set */
   m_NewGrib = new WR_GribRecordSet(grib->m_ID);
   m_NewGrib->m_Reference_Time = grib->m_Reference_Time;
-  for (int i = 0; i < Idx_COUNT; i++) {
-    switch (i) {
-      case Idx_HTSIGW:
-      case Idx_WIND_GUST:
-      case Idx_WIND_VX:
-      case Idx_WIND_VY:
-      case Idx_SEACURRENT_VX:
-      case Idx_SEACURRENT_VY:
-        if (grib->m_GribRecordPtrArray[i]) {
-          m_NewGrib->SetUnRefGribRecord(
-              i, new GribRecord(*grib->m_GribRecordPtrArray[i]));
-        }
-        break;
-      default:
-        break;
-    }
-  }
+   for (int i = 0; i < Idx_COUNT; i++) {
+     switch (i) {
+       case Idx_HTSIGW:
+       case Idx_WIND_GUST:
+       case Idx_WIND_VX:
+       case Idx_WIND_VY:
+       case Idx_SEACURRENT_VX:
+       case Idx_SEACURRENT_VY:
+       case Idx_AIR_TEMP:
+       case Idx_CLOUD_TOT:
+       case Idx_HUMID_RE:
+       case Idx_PRECIP_TOT:
+       case Idx_SEA_TEMP:
+       case Idx_PRESSURE:
+       case Idx_COMP_REFL:
+       case Idx_CAPE:
+         if (grib->m_GribRecordPtrArray[i]) {
+           m_NewGrib->SetUnRefGribRecord(
+               i, new GribRecord(*grib->m_GribRecordPtrArray[i]));
+         }
+         break;
+       default:
+         break;
+     }
+   }
   m_SharedNewGrib.SetGribRecordSet(m_NewGrib);
 }
 
@@ -699,17 +697,42 @@ wxString RouteMap::GetWeatherForecastStatusMessage(
 
 // Implementation for route error reporting
 
-void RouteMap::CollectPositionErrors(Position* position,
-                                     std::vector<Position*>& failed_positions) {
-  // If this position has an error, add it to the list
-  if (position->propagation_error != PROPAGATION_NO_ERROR) {
-    failed_positions.push_back(position);
+void RouteMap::GetPropagationErrorCounts(
+    std::map<PropagationError, int>& counts,
+    std::vector<Position*>* failed_positions) const {
+  if (origin.empty()) return;
+
+  IsoChron* latest = origin.back();
+  for (IsoRouteList::const_iterator it = latest->routes.begin();
+       it != latest->routes.end(); ++it) {
+    Position* p = (*it)->skippoints->point;
+    do {
+      if (p->propagated && p->propagation_error != PROPAGATION_NO_ERROR) {
+        counts[p->propagation_error]++;
+        if (failed_positions) {
+          failed_positions->push_back(p);
+        }
+      }
+      p = p->next;
+    } while (p != (*it)->skippoints->point);
+  }
+}
+
+void RouteMap::UpdatePropagationError() {
+  std::map<PropagationError, int> error_counts;
+  GetPropagationErrorCounts(error_counts);
+
+  PropagationError most_common = PROPAGATION_NO_ERROR;
+  int max_count = 0;
+  for (auto const& [error, count] : error_counts) {
+    if (count > max_count) {
+      max_count = count;
+      most_common = error;
+    }
   }
 
-  // Check parent positions recursively to find chain of propagation
-  if (position->parent && !position->parent->propagated) {
-    CollectPositionErrors(dynamic_cast<Position*>(position->parent),
-                          failed_positions);
+  if (most_common != PROPAGATION_NO_ERROR) {
+    m_lastPropagationError = most_common;
   }
 }
 
@@ -723,26 +746,10 @@ wxString RouteMap::GetRoutingErrorInfo() {
     return info;
   }
 
-  // Get the most recent isochrone
-  IsoChron* latest = origin.back();
+  // Get failed positions and error counts from the latest isochrone
   std::vector<Position*> failed_positions;
-
-  // Track error counts to find most common issues
   std::map<PropagationError, int> error_counts;
-
-  // Look at all positions in the latest isochrone
-  for (IsoRouteList::iterator it = latest->routes.begin();
-       it != latest->routes.end(); ++it) {
-    Position* p = (*it)->skippoints->point;
-    do {
-      // If this position wasn't able to propagate further, add it to analysis
-      if (p->propagated && p->propagation_error != PROPAGATION_NO_ERROR) {
-        failed_positions.push_back(p);
-        error_counts[p->propagation_error]++;
-      }
-      p = p->next;
-    } while (p != (*it)->skippoints->point);
-  }
+  GetPropagationErrorCounts(error_counts, &failed_positions);
 
   if (failed_positions.empty()) {
     if (m_bReachedDestination) {
@@ -821,6 +828,12 @@ wxString RouteMap::GetRoutingErrorInfo() {
       info +=
           wxString::Format(_("\nWind exceeds limits. Increase '%s' if safe."),
                            _("Max True Wind"));
+    }
+
+    if (error_counts[PROPAGATION_EXCEEDED_MAX_CAPE] > 0) {
+      info +=
+          wxString::Format(_("\nCAPE exceeds limits. Increase '%s' if safe."),
+                           _("Max CAPE"));
     }
 
     if (error_counts[PROPAGATION_BOAT_SPEED_COMPUTATION_FAILED] > 0) {

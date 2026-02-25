@@ -267,10 +267,14 @@ void weather_routing_pi::SetPluginMessage(wxString& message_id,
   if (message_id == "GRIB_VALUES") {
     Json::Value root;
     Json::Reader reader;
-    // wxString    sLogMessage;
     if (reader.parse(static_cast<std::string>(message_body), root)) {
-      g_ReceivedJSONMsg = root;
-      g_ReceivedMessage = message_body;
+      if (root["Type"].asString() == "Reply") {
+        wxLogMessage("weather_routing_pi::SetPluginMessage: GOT REPLY: %s", message_body);
+        g_ReceivedJSONMsg = root;
+        g_ReceivedMessage = message_body;
+      } else {
+        wxLogMessage("weather_routing_pi::SetPluginMessage: GRIB_VALUES ID but Type=%s (ignored)", root["Type"].asString());
+      }
     }
   } else if (message_id == "GRIB_TIMELINE") {
     Json::Reader r;

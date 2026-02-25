@@ -2344,6 +2344,7 @@ bool WeatherRouting::OpenXML(wxString filename, bool reportfailure) {
             AttributeDouble(e, "MaxTrueWindKnots", 50);
         configuration.MaxApparentWindKnots =
             AttributeDouble(e, "MaxApparentWindKnots", 50);
+        configuration.MaxCAPE = AttributeDouble(e, "MaxCAPE", 1000);
 
         configuration.MaxSwellMeters =
             AttributeDouble(e, "MaxSwellMeters", 20.);
@@ -2485,6 +2486,7 @@ void WeatherRouting::SaveXML(wxString filename) {
     c->SetAttribute("MaxSearchAngle", configuration.MaxSearchAngle);
     c->SetAttribute("MaxTrueWindKnots", configuration.MaxTrueWindKnots);
     c->SetAttribute("MaxApparentWindKnots", configuration.MaxApparentWindKnots);
+    c->SetAttribute("MaxCAPE", configuration.MaxCAPE);
 
     c->SetDoubleAttribute("MaxSwellMeters", configuration.MaxSwellMeters);
     c->SetAttribute("MaxLatitude", configuration.MaxLatitude);
@@ -2795,6 +2797,14 @@ void WeatherRoute::Update(WeatherRouting* wr, bool stateonly) {
           State += _("Boundary");
           State += ": ";
           State += _("Failed");
+          needsComma = true;
+        }
+
+        if (State == "") {
+          PropagationError err = routemapoverlay->GetLastPropagationError();
+          if (err != PROPAGATION_NO_ERROR) {
+            State = Position::GetErrorText(err);
+          }
         }
       }
     } else {
@@ -3605,6 +3615,7 @@ RouteMapConfiguration WeatherRouting::DefaultConfiguration() {
   configuration.MaxApparentWindKnots = 50;  // Safety margin for wind speed
 
   configuration.MaxSwellMeters = 20.;
+  configuration.MaxCAPE = 1000.;
   configuration.MaxLatitude = 90;
   configuration.TackingTime = 0;
   configuration.JibingTime = 0;

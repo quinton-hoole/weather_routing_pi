@@ -429,8 +429,11 @@ wxString Position::GetErrorText(PropagationError error) {
                                    _("Boat speed computation failed"),
                                    _("Exceeded maximum apparent wind"),
                                    _("Land intersection detected"),
+                                   _("Exceeded land safety margin"),
                                    _("Boundary intersection detected"),
                                    _("Cyclone track crossing detected"),
+                                   _("Exceeded maximum CAPE"),
+                                   _("Angle outside search angle"),
                                    _("No valid angles found")};
 
   if (error >= 0 && error <= PROPAGATION_ANGLE_ERROR)
