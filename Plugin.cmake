@@ -32,8 +32,8 @@ set(OCPN_RELEASE_REPO
 # -------  Plugin setup --------
 #
 set(PKG_NAME weather_routing_pi)
-set(PKG_VERSION  2.1.1)
-set(PKG_PRERELEASE "")  # Empty, or a tag like 'beta'
+set(PKG_VERSION  1.15.45.8)
+set(PKG_PRERELEASE "beta")  # Empty, or a tag like 'beta'
 
 set(DISPLAY_NAME WeatherRouting)    # Dialogs, installer artifacts, ...
 set(PLUGIN_API_NAME WeatherRouting) # As of GetCommonName() in plugin API
