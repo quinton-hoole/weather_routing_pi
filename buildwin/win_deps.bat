@@ -26,13 +26,13 @@ pathman add %HomeDrive%%HomePath%\.local\bin >nul
 
 :: Install choco cmake and add it's persistent user path element
 ::
-set CMAKE_HOME=C:\Program Files\CMake
+set CMAKE_HOME=%PROGRAMFILES%\CMake
 if not exist "%CMAKE_HOME%\bin\cmake.exe" choco install --no-progress -y cmake
 pathman add "%CMAKE_HOME%\bin" > nul
 
 :: Install choco poedit and add it's persistent user path element
 ::
-set POEDIT_HOME=C:\Program Files (x86)\Poedit\Gettexttools
+set POEDIT_HOME=%PROGRAMFILES%\Poedit\Gettexttools
 if not exist "%POEDIT_HOME%" choco install --no-progress -y poedit
 pathman add "%POEDIT_HOME%\bin" > nul
 
