@@ -267,6 +267,14 @@ bool WeatherData::ReadWeatherDataAndCheckConstraints(
     return false;
   }
 
+  // Check Max CAPE constraint
+  double cape = WeatherDataProvider::GetCAPE(configuration, lat, lon);
+  wxLogMessage("RoutePoint::ReadWeatherDataAndCheckConstraints: calling CheckMaxCAPEConstraint with cape=%f", cape);
+  if (!ConstraintChecker::CheckMaxCAPEConstraint(configuration, cape,
+                                                 error_code)) {
+    return false;
+  }
+
   // Read wind and current data
   if (!WeatherDataProvider::ReadWindAndCurrents(
           configuration, position, twdOverGround, twsOverGround, twdOverWater,
