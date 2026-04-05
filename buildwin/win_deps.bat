@@ -31,7 +31,7 @@ if not exist "%CMAKE_HOME%\bin\cmake.exe" choco install --no-progress -y cmake
 pathman add "%CMAKE_HOME%\bin" > nul
 
 :: Install choco poedit and add it's persistent user path element
-:: # Temporarily hardcode 32 bit version 
+:: # Temporarily hardcode 32 bit version.
 :: see https://github.com/OpenCPN/OpenCPN/issues/5125#issuecomment-4063762416
 ::
 set POEDIT_HOME=C:\Program Files (x86)\Poedit\Gettexttools 
