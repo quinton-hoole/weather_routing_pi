@@ -29,20 +29,17 @@
 
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
 
 #include "AboutDialog.h"
 #include "weather_routing_pi.h"
-
-#include "Utilities.h"
 
 AboutDialog::AboutDialog(wxWindow* parent) : AboutDialogBase(parent) {
   //     m_stVersion->SetLabel(wxString::Format(_T("%d.%d"),PLUGIN_VERSION_MAJOR,
   //     PLUGIN_VERSION_MINOR));
 
   m_stVersion->SetLabel(wxString::Format(
-      _T("%d.%d.%d.%d"), PLUGIN_VERSION_MAJOR, PLUGIN_VERSION_MINOR,
-      PLUGIN_VERSION_PATCH, PLUGIN_VERSION_TWEAK));
+      _T("%d.%d.%d"), PLUGIN_VERSION_MAJOR, PLUGIN_VERSION_MINOR,
+      PLUGIN_VERSION_PATCH));
 
 #ifdef __OCPN__ANDROID__
   wxSize sz = ::wxGetDisplaySize();
