@@ -55,6 +55,10 @@ public:
   ~ConfigurationDialog();
 
   void EditBoat();
+#ifdef __OCPN__ANDROID__
+  void ShowAndroidSection(size_t section);
+  void SetAndroidEndpoint(bool start, const wxString& name);
+#endif
   /**
    * Updates the configuration dialog with settings from given route
    * configurations
@@ -77,16 +81,29 @@ public:
 
   void AddSource(wxString name);
   void RemoveSource(wxString name);
+  void RenameSource(const wxString& oldName, const wxString& newName);
   void ClearSources();
+  /// Fill combobox for start or end selection with all OpenCPN waypoints.
+  void AddWaypoints(const bool toStart);
+  /// Fill combobox for start or end selection with all Weather Routing positions.
+  void AddPositions(const bool toStart);
   void SetBoatFilename(wxString path);
+  /**
+   * Synchronize time-zone controls after SettingsDialog has been constructed
+   * and its persisted settings have been loaded.
+   */
+  void RefreshTimeZoneControls();
 
   wxDateTime m_GribTimelineTime;
 
 protected:
   void OnValueChange(wxEvent& event) {
+    if (m_bBlockUpdate) return;
     m_edited_controls.push_back(event.GetEventObject());
   }
+  void OnChartSafetyChanged(wxCommandEvent& event);
   void OnUpdate(wxCommandEvent& event) {
+    if (HandleEngineEdit(event.GetEventObject())) return;
     OnValueChange(event);
     Update();
   }
@@ -100,9 +117,11 @@ protected:
     Update();
   }
   void OnUseCurrentTime(wxCommandEvent& event);
+  void OnTimeZoneDisplay(wxCommandEvent& event);
   void OnGribTime(wxCommandEvent& event);
   void OnCurrentTime(wxCommandEvent& event);
   void OnUpdateSpin(wxSpinEvent& event) {
+    if (HandleEngineEdit(event.GetEventObject())) return;
     OnValueChange(event);
     Update();
   }
@@ -112,30 +131,50 @@ protected:
   void OnUpdateIntegratorRungeKutta(wxCommandEvent& event);
 
   void EnableSpin(wxMouseEvent& event) {
-    wxDynamicCast(event.GetEventObject(), wxSpinCtrl)->Enable();
+    if (auto* spin = wxDynamicCast(event.GetEventObject(), wxSpinCtrl))
+      spin->Enable();
     event.Skip();
   }
   void EnableSpinDouble(wxMouseEvent& event) {
-    wxDynamicCast(event.GetEventObject(), wxSpinCtrlDouble)->Enable();
+    if (auto* spin = wxDynamicCast(event.GetEventObject(), wxSpinCtrlDouble))
+      spin->Enable();
     event.Skip();
   }
   void OnStartFromBoat(wxCommandEvent& event);
   void OnStartFromPosition(wxCommandEvent& event);
+  void OnStartFromWaypoint(wxCommandEvent& event);
+  void OnRoutingTimeMode(wxCommandEvent& event);
+  void OnEndAtPosition(wxCommandEvent& event);
+  void OnEndAtWaypoint(wxCommandEvent& event);
   void OnAvoidCyclones(wxCommandEvent& event);
   void OnUseMotor(wxCommandEvent& event);
+  void OnUseOptimalAngles(wxCommandEvent& event);
   void OnAddDegreeStep(wxCommandEvent& event);
   void OnRemoveDegreeStep(wxCommandEvent& event);
   void OnClearDegreeSteps(wxCommandEvent& event);
   void OnGenerateDegreeSteps(wxCommandEvent& event);
+  void UpdateChartSafetyRamLabel();
+  void UpdateRoutingTimeModeControls();
   void OnClose(wxCommandEvent& event) { Hide(); }
 
 private:
+#ifdef __OCPN__ANDROID__
+  wxStaticText* m_androidMemoryStatus{nullptr};
+  wxStaticText* m_androidBoatName{nullptr};
+  void UpdateAndroidMemoryStatus();
+  void UpdateAndroidBoatName();
+#endif
   void UpdateCycloneControls();
+  void UpdateEngineControls();
+  bool HandleEngineEdit(wxObject* control);
+  void RefreshEnginePresetStatus();
 
   void SetStartDateTime(wxDateTime datetime);
 
   WeatherRouting& m_WeatherRouting;
   bool m_bBlockUpdate;
+  bool m_endpointLocked = false;
+  std::vector<int> m_shorelineChoiceResolutions;
 
   std::vector<wxObject*> m_edited_controls;
 };

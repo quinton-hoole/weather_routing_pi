@@ -199,7 +199,8 @@ static char* strtok_polar(const char* line, char** saveptr) {
 #define MAX_WINDSPEEDS_IN_TABLE 200
 #define MESSAGE(S)                                                        \
   (wxString::FromUTF8(wxFileName(filename).GetFullName()) +               \
-   (linenum > 0 ? (_(" line ") + wxString::Format("%d", linenum)) : "") + \
+   (linenum > 0 ? (_(" line ") + wxString::Format("%d", linenum))          \
+                 : wxString()) +                                          \
    ": " + S + "\n")
 #define PARSE_WARNING(S)                             \
   do {                                               \
@@ -328,6 +329,8 @@ failed:
 }
 
 bool Polar::Save(const wxString& filename) {
+  // Reject empty dimensions before opening/truncating an existing file.
+  if (wind_speeds.empty() || degree_steps.empty()) return false;
   FILE* f = fopen(filename, "w");
   if (!f) return false;
 
@@ -495,17 +498,24 @@ double Polar::Speed(double twa, double tws, PolarSpeedStatus* status,
     }
   }
 
-  if (bound) {
-    if (tws < wind_speeds[0].tws) {
+  double windSpeedFactor = 1.0;
+  if (tws < wind_speeds.front().tws) {
+    if (bound) {
       if (status) *status = POLAR_SPEED_WIND_TOO_LIGHT;
       return NAN;
-    } else if (tws > wind_speeds[wind_speeds.size() - 1].tws) {
-      if (status) *status = POLAR_SPEED_WIND_TOO_STRONG;
-      if (bound)
-        return NAN;  // When bound is true (default), maintain original behavior
-      // When bound is false, use the max wind speed in the polar
-      tws = wind_speeds[wind_speeds.size() - 1].tws;
     }
+    // A caller allowing fallback must not extrapolate an arbitrary intercept
+    // at zero wind. Taper the lowest measured speed to zero instead.
+    windSpeedFactor = tws / wind_speeds.front().tws;
+    tws = wind_speeds.front().tws;
+  } else if (tws > wind_speeds.back().tws) {
+    if (bound) {
+      if (status) *status = POLAR_SPEED_WIND_TOO_STRONG;
+      return NAN;
+    }
+    // Preserve the last measured speed for explicit fallback. Extending the
+    // last slope can turn a light-wind sail into the fastest heavy-wind sail.
+    tws = wind_speeds.back().tws;
   }
 
   unsigned int W1i = degree_step_index[(int)floor(twa)];
@@ -524,8 +534,8 @@ double Polar::Speed(double twa, double tws, PolarSpeedStatus* status,
     if (VMGAngle(ws1, ws2, tws, vmgW)) {
       // Recursively call Speed with optimized angle and project the result
       // onto the original course.
-      return Speed(vmgW, tws, status, bound, false) * cos(deg2rad(vmgW)) /
-             cos(deg2rad(twa));
+      return windSpeedFactor * Speed(vmgW, tws, status, bound, false) *
+             cos(deg2rad(vmgW)) / cos(deg2rad(twa));
     }
   }
 
@@ -537,7 +547,7 @@ double Polar::Speed(double twa, double tws, PolarSpeedStatus* status,
   double VB1 = interp_value(tws, VW1, VW2, VB11, VB21);
   double VB2 = interp_value(tws, VW1, VW2, VB12, VB22);
 
-  double stw = interp_value(twa, W1, W2, VB1, VB2);
+  double stw = windSpeedFactor * interp_value(twa, W1, W2, VB1, VB2);
 
   if (stw < 0) {
     // with faulty polars, extrapolation, sometimes results in
@@ -623,6 +633,11 @@ double Polar::SpeedAtApparentWind(double A, double aws, double* pW) {
 }
 
 SailingVMG Polar::GetVMGTrueWind(double VW) {
+  if (wind_speeds.empty() || degree_steps.empty()) {
+    SailingVMG unavailable;
+    for (float& value : unavailable.values) value = NAN;
+    return unavailable;
+  }
   int VW1i, VW2i;
   ClosestVWi(VW, VW1i, VW2i);
 
@@ -806,7 +821,7 @@ void Polar::UpdateSpeeds() {
 void Polar::UpdateDegreeStepLookup() {
   unsigned int Wi = 0;
   for (int d = 0; d < DEGREES; d++) {
-    while (Wi < degree_steps.size() - 1) {
+    while (Wi + 1 < degree_steps.size()) {
       if (d <= degree_steps[Wi + 1]) break;
       Wi++;
     }
@@ -870,9 +885,6 @@ bool Polar::InsideCrossOverContour(float twa, float tws, bool optimize_tacking,
   // on the point of sail.
   if (!CrossOverRegion.Contains(twa, tws)) {
     if (status) *status = POLAR_SPEED_INVALID_SAIL_CONFIGURATION;
-    wxLogGeneric(wxLOG_Debug,
-                 "Outside cross over region: TWA=%.2f TWS=%.2f. Polar=", twa,
-                 tws, wxFileName(FileName).GetFullName());
     return false;
   }
   return true;
@@ -1037,6 +1049,10 @@ void Polar::Generate(const std::list<PolarMeasurement>& measurements) {
 
 void Polar::CalculateVMG(int VWi) {
   SailingWindSpeed& ws = wind_speeds[VWi];
+  if (degree_steps.empty()) {
+    for (float& value : ws.VMG.values) value = NAN;
+    return;
+  }
   // limits for port/starboard upwind/downwind
   const double limits[4][2] = {{0, 90}, {270, 360}, {90, 180}, {180, 270}};
   for (int i = 0; i < 4; i++) {
