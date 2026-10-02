@@ -24,18 +24,27 @@
  *
  */
 
+#include "WeatherRoutingMessageDialog.h"
 #include <wx/wx.h>
 
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
 
 #include "SettingsDialog.h"
-#include "Utilities.h"
-#include "Boat.h"
+#include "WeatherRoutingWxCompat.h"
 #include "RouteMapOverlay.h"
 #include "weather_routing_pi.h"
 #include "WeatherRouting.h"
+#include "AndroidDialogHeader.h"
+#include "DeviceMemoryPolicy.h"
+#include "SystemMemory.h"
+#ifdef __OCPN__ANDROID__
+#include <QAbstractSpinBox>
+#endif
+
+#ifdef __WXMSW__
+#include "AddressSpaceMonitor.h"
+#endif
 
 const wxString SettingsDialog::column_names[] = {"",  // "Visible" column
                                                  "Boat",
@@ -63,18 +72,339 @@ const wxString SettingsDialog::column_names[] = {"",  // "Visible" column
                                                  "Jibes",
                                                  "Sail Plan Changes",
                                                  "Sailing Comfort",
+                                                 "Wx",
                                                  "State"};
 
 SettingsDialog::SettingsDialog(wxWindow* parent)
 #ifndef __WXOSX__
     : SettingsDialogBase(parent)
+#ifdef __WXMSW__
+      ,
+      m_staticTextMemoryStats(nullptr),
+      m_usageSizer(nullptr)
+#endif
 #else
     : SettingsDialogBase(
           parent, wxID_ANY, _("Weather Routing Settings"), wxDefaultPosition,
           wxDefaultSize,
           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxSTAY_ON_TOP)
+#ifdef __WXMSW__
+      ,
+      m_staticTextMemoryStats(nullptr),
+      m_usageSizer(nullptr)
+#endif
 #endif
 {
+#ifdef __WXMSW__
+
+  wxLogMessage("SettingsDialog::Constructor - Windows-specific code starting");
+
+  // SET GAUGE RANGE TO 100
+  m_gaugeMemoryUsage->SetRange(100);
+  wxLogMessage("SettingsDialog::Constructor - Gauge range set to 100");
+
+  // FIX: Reorganize the AddressSpaceMonitor groupbox layout dynamically
+  wxWindow* gaugeParent = m_gaugeMemoryUsage->GetParent();
+  wxLogMessage("SettingsDialog::Constructor - gaugeParent = %p", gaugeParent);
+
+  if (gaugeParent) {
+    wxSizer* groupSizer = gaugeParent->GetSizer();
+    wxLogMessage("SettingsDialog::Constructor - groupSizer = %p (BEFORE fix)",
+                 groupSizer);
+
+    // FIX: If groupSizer is NULL, try to get it from the parent's containing
+    // sizer
+    if (!groupSizer && gaugeParent->GetParent()) {
+      wxWindow* grandParent = gaugeParent->GetParent();
+      wxSizer* grandParentSizer = grandParent->GetSizer();
+
+      if (grandParentSizer) {
+        wxLogMessage(
+            "SettingsDialog::Constructor - Searching grandParent sizer for "
+            "wxStaticBox sizer");
+
+        // Look for a wxStaticBoxSizer that contains our wxStaticBox
+        wxSizerItemList& items = grandParentSizer->GetChildren();
+        for (wxSizerItemList::iterator it = items.begin(); it != items.end();
+             ++it) {
+          wxSizer* subSizer = (*it)->GetSizer();
+          if (subSizer) {
+            wxStaticBoxSizer* staticBoxSizer =
+                dynamic_cast<wxStaticBoxSizer*>(subSizer);
+            if (staticBoxSizer &&
+                staticBoxSizer->GetStaticBox() == gaugeParent) {
+              groupSizer = staticBoxSizer;
+              wxLogMessage(
+                  "SettingsDialog::Constructor - Found wxStaticBoxSizer: %p",
+                  groupSizer);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    wxLogMessage("SettingsDialog::Constructor - groupSizer = %p (AFTER fix)",
+                 groupSizer);
+
+    if (groupSizer) {
+      wxLogMessage(
+          "SettingsDialog::Constructor - Starting dynamic layout "
+          "reorganization");
+
+      // PART 1: Find and reorganize threshold label + spin control
+      wxStaticText* thresholdLabel = nullptr;
+      wxSizerItemList& children = groupSizer->GetChildren();
+
+      // Find the label that's immediately before the spin control
+      for (wxSizerItemList::iterator it = children.begin();
+           it != children.end(); ++it) {
+        wxSizerItem* item = *it;
+        if (item && item->GetWindow() == m_spinThreshold) {
+          if (it != children.begin()) {
+            wxSizerItemList::iterator prevIt = it;
+            --prevIt;
+            wxSizerItem* prevItem = *prevIt;
+            if (prevItem && prevItem->GetWindow()) {
+              thresholdLabel =
+                  dynamic_cast<wxStaticText*>(prevItem->GetWindow());
+            }
+          }
+          break;
+        }
+      }
+
+      if (thresholdLabel && m_spinThreshold) {
+        wxLogMessage("    - Found threshold label: '%s'",
+                     thresholdLabel->GetLabel());
+
+        // Create horizontal sizer for threshold label + spin
+        wxBoxSizer* thresholdSizer = new wxBoxSizer(wxHORIZONTAL);
+
+        // Remove from parent sizer
+        groupSizer->Detach(thresholdLabel);
+        groupSizer->Detach(m_spinThreshold);
+
+        thresholdSizer->Add(thresholdLabel, 0,
+                            wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(5));
+        thresholdSizer->Add(m_spinThreshold, 0, wxALIGN_CENTER_VERTICAL);
+        thresholdSizer->AddStretchSpacer(1);
+
+        // Find where to insert (look for first checkbox)
+        size_t insertPos = 0;
+        children = groupSizer->GetChildren();
+        for (wxSizerItemList::iterator it = children.begin();
+             it != children.end(); ++it, ++insertPos) {
+          wxWindow* win = (*it)->GetWindow();
+          if (win == m_checkSuppressAlert) {
+            break;
+          }
+        }
+
+        // Insert the horizontal sizer
+        groupSizer->Insert(insertPos, thresholdSizer, 0, wxEXPAND | wxALL,
+                           FromDIP(5));
+        wxLogMessage("    - Created horizontal threshold sizer at position %zu",
+                     insertPos);
+      }
+
+      // PART 2: Find and reorganize "Usage:" label
+      wxStaticText* usageLabel = nullptr;
+      children = groupSizer->GetChildren();
+
+      wxLogMessage(
+          "    - PART 2: Searching for usage label... (children count: %zu)",
+          children.size());
+
+      // Search for usage label (may be in sub-sizer)
+      for (wxSizerItemList::iterator it = children.begin();
+           it != children.end(); ++it) {
+        wxSizerItem* item = *it;
+        if (!item) continue;
+
+        wxWindow* win = item->GetWindow();
+        wxSizer* sizer = item->GetSizer();
+
+        if (win) {
+          wxStaticText* txt = dynamic_cast<wxStaticText*>(win);
+          if (txt) {
+            wxString label = txt->GetLabel().Lower();
+            if (label.Contains("usage") || label.Contains("live") ||
+                label.Contains("address") || label.Contains("space")) {
+              usageLabel = txt;
+              break;
+            }
+          }
+        } else if (sizer) {
+          // Check sub-sizer children
+          wxSizerItemList& subChildren = sizer->GetChildren();
+          for (wxSizerItemList::iterator subIt = subChildren.begin();
+               subIt != subChildren.end(); ++subIt) {
+            wxWindow* subWin = (*subIt)->GetWindow();
+            if (subWin) {
+              wxStaticText* subTxt = dynamic_cast<wxStaticText*>(subWin);
+              if (subTxt) {
+                wxString label = subTxt->GetLabel().Lower();
+                if (label.Contains("usage") || label.Contains("live") ||
+                    label.Contains("address") || label.Contains("space")) {
+                  usageLabel = subTxt;
+                  break;
+                }
+              }
+            }
+          }
+          if (usageLabel) break;
+        }
+      }
+
+      wxLogMessage("    - Search complete. usageLabel = %p", usageLabel);
+
+      if (usageLabel) {
+        wxLogMessage(
+            "    - Found usage label: '%s', detaching from parent sizer",
+            usageLabel->GetLabel());
+
+        // Find the actual parent sizer
+        wxSizer* labelParentSizer = nullptr;
+        children = groupSizer->GetChildren();
+
+        for (wxSizerItemList::iterator it = children.begin();
+             it != children.end(); ++it) {
+          wxWindow* win = (*it)->GetWindow();
+          if (win == usageLabel) {
+            labelParentSizer = groupSizer;
+            break;
+          }
+
+          wxSizer* subSizer = (*it)->GetSizer();
+          if (subSizer) {
+            wxSizerItemList& subChildren = subSizer->GetChildren();
+            for (wxSizerItemList::iterator subIt = subChildren.begin();
+                 subIt != subChildren.end(); ++subIt) {
+              wxWindow* subWin = (*subIt)->GetWindow();
+              if (subWin == usageLabel) {
+                labelParentSizer = subSizer;
+                break;
+              }
+            }
+            if (labelParentSizer) break;
+          }
+        }
+
+        if (!labelParentSizer) {
+          wxLogError("    - Could not find parent sizer for usage label!");
+        } else {
+          // Change the label text
+          usageLabel->SetLabel("Usage:");
+
+          // Ensure label uses normal font weight
+          wxFont labelFont = usageLabel->GetFont();
+          labelFont.SetWeight(wxFONTWEIGHT_NORMAL);
+          usageLabel->SetFont(labelFont);
+
+          // Create horizontal sizer for usage label + dynamic text
+          m_usageSizer = new wxBoxSizer(wxHORIZONTAL);
+          wxLogMessage("    - Created m_usageSizer: %p", m_usageSizer);
+
+          // Remove label from its parent sizer
+          bool detached = labelParentSizer->Detach(usageLabel);
+          wxLogMessage("    - Detached label from parent sizer: %s",
+                       detached ? "SUCCESS" : "FAILED");
+
+          // Add label to new horizontal sizer
+          m_usageSizer->Add(usageLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+                            FromDIP(5));
+
+          // Find where to insert (before gauge)
+          size_t insertPos = 0;
+          children = groupSizer->GetChildren();
+          for (wxSizerItemList::iterator it = children.begin();
+               it != children.end(); ++it, ++insertPos) {
+            wxWindow* win = (*it)->GetWindow();
+            if (win == m_gaugeMemoryUsage) {
+              break;
+            }
+          }
+
+          // Insert the horizontal sizer BEFORE the gauge
+          groupSizer->Insert(insertPos, m_usageSizer, 0, wxEXPAND | wxALL,
+                             FromDIP(5));
+          wxLogMessage(
+              "    - Inserted m_usageSizer at position %zu (m_usageSizer=%p)",
+              insertPos, m_usageSizer);
+        }
+      } else {
+        wxLogError(
+            "    - FAILED to find usage label! m_usageSizer will be NULL!");
+      }
+
+      groupSizer->Layout();
+      gaugeParent->Layout();
+      wxLogMessage(
+          "SettingsDialog::Constructor - Dynamic layout complete "
+          "(m_usageSizer=%p)",
+          m_usageSizer);
+    }
+  }
+
+  // Connect memory monitor event handlers
+  m_spinThreshold->Connect(
+      wxEVT_SPINCTRLDOUBLE,
+      wxSpinDoubleEventHandler(SettingsDialog::OnThresholdChanged), NULL, this);
+
+  m_checkSuppressAlert->Connect(
+      wxEVT_CHECKBOX,
+      wxCommandEventHandler(SettingsDialog::OnSuppressAlertChanged), NULL,
+      this);
+
+  m_checkLogUsage->Connect(
+      wxEVT_CHECKBOX, wxCommandEventHandler(SettingsDialog::OnLogUsageChanged),
+      NULL, this);
+
+  // Final layout
+  Layout();
+  Fit();
+
+  wxLogMessage("SettingsDialog::Constructor - Initialization complete");
+#endif
+}
+
+SettingsDialog::~SettingsDialog() {
+#ifdef __WXMSW__
+  wxLogMessage("SettingsDialog: Destructor starting");
+
+  if (m_spinThreshold) {
+    m_spinThreshold->Disconnect(
+        wxEVT_SPINCTRLDOUBLE,
+        wxSpinDoubleEventHandler(SettingsDialog::OnThresholdChanged), NULL,
+        this);
+  }
+
+  if (m_checkSuppressAlert) {
+    m_checkSuppressAlert->Disconnect(
+        wxEVT_CHECKBOX,
+        wxCommandEventHandler(SettingsDialog::OnSuppressAlertChanged), NULL,
+        this);
+  }
+
+  if (m_checkLogUsage) {
+    m_checkLogUsage->Disconnect(
+        wxEVT_CHECKBOX,
+        wxCommandEventHandler(SettingsDialog::OnLogUsageChanged), NULL, this);
+  }
+
+  // Clear the gauge and text label references in the monitor
+  AddressSpaceMonitor* monitor = GetMonitor();
+  if (monitor && monitor->IsValid()) {
+    monitor->SetGauge(nullptr);
+    monitor->SetTextLabel(nullptr);
+    wxLogMessage("SettingsDialog: Destructor - Cleared monitor UI references");
+  }
+
+  m_staticTextMemoryStats = nullptr;
+
+  wxLogMessage("SettingsDialog: Destructor complete");
+#endif
 }
 
 void SettingsDialog::LoadSettings() {
@@ -104,7 +434,6 @@ void SettingsDialog::LoadSettings() {
               AlternateRouteThickness);
   m_sAlternateRouteThickness->SetValue(AlternateRouteThickness);
 
-  // Cursor Route optional
   bool DisplayCursorRoute = m_cbDisplayCursorRoute->GetValue();
   pConf->Read(_T("CursorRoute"), &DisplayCursorRoute, DisplayCursorRoute);
   m_cbDisplayCursorRoute->SetValue(DisplayCursorRoute);
@@ -121,17 +450,16 @@ void SettingsDialog::LoadSettings() {
   pConf->Read(_T("DisplayWindBarbs"), &DisplayWindBarbs, DisplayWindBarbs);
   m_cbDisplayWindBarbs->SetValue(DisplayWindBarbs);
 
-  // WindBarbsOnRoute Customization
   int WindBarbsOnRouteThickness = m_sWindBarbsOnRouteThickness->GetValue();
   pConf->Read(_T("WindBarbsOnRouteThickness"), &WindBarbsOnRouteThickness,
               WindBarbsOnRouteThickness);
   m_sWindBarbsOnRouteThickness->SetValue(WindBarbsOnRouteThickness);
+
   bool WindBarbsOnRouteApparent = m_cbDisplayApparentWindBarbs->GetValue();
   pConf->Read(_T("WindBarbsOnRouteApparent"), &WindBarbsOnRouteApparent,
               WindBarbsOnRouteApparent);
   m_cbDisplayApparentWindBarbs->SetValue(WindBarbsOnRouteApparent);
 
-  // ComfortOnRoute Customization
   bool DisplayComfortOnRoute = m_cbDisplayComfort->GetValue();
   pConf->Read(_T("DisplayComfortOnRoute"), &DisplayComfortOnRoute,
               DisplayComfortOnRoute);
@@ -142,14 +470,21 @@ void SettingsDialog::LoadSettings() {
   m_cbDisplayCurrent->SetValue(DisplayCurrent);
 
   int ConcurrentThreads = wxThread::GetCPUCount();
+#ifdef __OCPN__ANDROID__
+  ConcurrentThreads = std::min(2, std::max(1, ConcurrentThreads - 2));
+#endif
+  ConcurrentThreads = weather_routing::MemoryAwareRouteWorkerLimit(
+      ConcurrentThreads, 0, weather_routing::AvailablePhysicalMemoryMiB());
   pConf->Read(_T("ConcurrentThreads"), &ConcurrentThreads, ConcurrentThreads);
   m_sConcurrentThreads->SetValue(ConcurrentThreads);
 
-  // set defaults
+  // Set defaults
   bool columns[WeatherRouting::NUM_COLS];
   for (int i = 0; i < WeatherRouting::NUM_COLS; i++)
     columns[i] = i != WeatherRouting::BOAT &&
-                 (i <= WeatherRouting::DISTANCE || i == WeatherRouting::STATE);
+                 (i <= WeatherRouting::DISTANCE ||
+                  i == WeatherRouting::WEATHER_SOURCE ||
+                  i == WeatherRouting::STATE);
 
   for (int i = 0; i < WeatherRouting::NUM_COLS; i++) {
     if (i == 0)
@@ -161,7 +496,23 @@ void SettingsDialog::LoadSettings() {
     m_cblFields->Check(i, columns[i]);
   }
 
-  m_cbUseLocalTime->SetValue((bool)pConf->Read(_T("UseLocalTime"), 0L));
+  const bool legacyUseLocalTime =
+      (bool)pConf->Read(_T("UseLocalTime"), 0L);
+  m_useLocalTimeZone =
+      (bool)pConf->Read(_T("UseLocalTimeZone"), legacyUseLocalTime);
+  pConf->Read(_T("DisplayTimeZone"), &m_displayTimeZone,
+              marine_time::SystemTimeZone());
+  if (!marine_time::IsTimeZoneAvailable(m_displayTimeZone)) {
+    m_displayTimeZone = marine_time::SystemTimeZone();
+  }
+  if (!marine_time::IsTimeZoneAvailable(m_displayTimeZone)) {
+    m_displayTimeZone = "UTC";
+    m_useLocalTimeZone = false;
+  }
+
+#ifdef __WXMSW__
+  LoadMemorySettings();
+#endif
 
   Fit();
 
@@ -171,6 +522,145 @@ void SettingsDialog::LoadSettings() {
   SetPosition(p);
 #ifdef __OCPN__ANDROID__
   wxSize sz = ::wxGetDisplaySize();
+  const auto oldChildren = GetChildren();
+  SetSizer(nullptr, false);
+  for (auto* child : oldChildren) child->Hide();
+  auto* book = new wxNotebook(this, wxID_ANY);
+  auto* display = new wxPanel(book, wxID_ANY);
+  auto* displayLayout = new wxBoxSizer(wxVERTICAL);
+  m_scrolledWindow4->GetContainingSizer()->Detach(m_scrolledWindow4);
+  m_scrolledWindow4->Reparent(display);
+  m_scrolledWindow4->SetMinSize(wxSize(0, 0));
+  m_scrolledWindow4->Show();
+  displayLayout->Add(m_scrolledWindow4, 1, wxEXPAND | wxALL, 8);
+  display->SetSizer(displayLayout);
+  book->AddPage(display, _("Chart display"), true);
+  auto* computation = new wxPanel(book, wxID_ANY);
+  auto* computationLayout = new wxBoxSizer(wxVERTICAL);
+  for (wxWindow* control : {static_cast<wxWindow*>(m_staticText115),
+                            static_cast<wxWindow*>(m_sConcurrentThreads)}) {
+    control->GetContainingSizer()->Detach(control);
+    control->Reparent(computation);
+    control->Show();
+    computationLayout->Add(control, 0, wxEXPAND | wxALL, 12);
+  }
+  m_sConcurrentThreads->SetMaxSize(wxSize(-1, -1));
+  auto* threadsNote = new wxStaticText(computation, wxID_ANY,
+      _("This is the requested maximum. Available RAM can automatically reduce simultaneous calculations. Each route needs its own search memory."));
+  computationLayout->Add(threadsNote, 0, wxEXPAND | wxALL, 12);
+  computation->SetSizer(computationLayout);
+  book->AddPage(computation, _("Computation"));
+  auto* routeFields = new wxPanel(book, wxID_ANY);
+  auto* routeFieldsLayout = new wxBoxSizer(wxVERTICAL);
+  m_cblFields->GetContainingSizer()->Detach(m_cblFields);
+  m_cblFields->Reparent(routeFields);
+  m_cblFields->Hide();
+  auto* fieldsScroll = new wxScrolledWindow(routeFields, wxID_ANY);
+  fieldsScroll->SetScrollRate(0, 16);
+  auto* fieldsChoices = new wxBoxSizer(wxVERTICAL);
+  for (unsigned i = 0; i < m_cblFields->GetCount(); ++i) {
+    auto* check = new wxCheckBox(fieldsScroll, wxID_ANY, m_cblFields->GetString(i));
+    check->SetValue(m_cblFields->IsChecked(i));
+    check->Bind(wxEVT_CHECKBOX, [this, check, i](wxCommandEvent& event) {
+      m_cblFields->Check(i, check->GetValue());
+      OnUpdateColumns(event);
+    });
+    fieldsChoices->Add(check, 0, wxEXPAND | wxALL, 8);
+  }
+  fieldsScroll->SetSizer(fieldsChoices);
+  routeFieldsLayout->Add(fieldsScroll, 1, wxEXPAND | wxALL, 12);
+  routeFields->SetSizer(routeFieldsLayout);
+  book->AddPage(routeFields, _("Route fields"));
+  auto* androidRoot = new wxBoxSizer(wxVERTICAL);
+  androidRoot->Add(book, 1, wxEXPAND);
+  SetSizer(androidRoot, true);
+
+  // wxQt's generic colour picker is invisible in the host build. Use a
+  // touch palette with an editable RGB value, retaining the same colour model.
+  for (auto* picker : {m_cpCursorRoute, m_cpDestinationRoute}) {
+    auto* button = new wxButton(picker->GetParent(), wxID_ANY,
+        picker->GetColour().GetAsString(wxC2S_HTML_SYNTAX));
+    picker->GetContainingSizer()->Replace(picker, button);
+    picker->Hide();
+    button->SetMinSize(wxSize(220, 72));
+    button->Bind(wxEVT_BUTTON, [this, picker, button](wxCommandEvent&) {
+      wxDialog palette(this, wxID_ANY, _("Route colour"));
+      auto* root = new wxBoxSizer(wxVERTICAL);
+      auto* input = new wxTextCtrl(&palette, wxID_ANY,
+          picker->GetColour().GetAsString(wxC2S_HTML_SYNTAX));
+      auto* instructions = new wxStaticText(&palette, wxID_ANY,
+          _("Choose a colour or enter #RRGGBB."));
+      root->Add(instructions, 0, wxEXPAND | wxALL, 16);
+      root->Add(input, 0, wxEXPAND | wxALL, 16);
+      auto* swatches = new wxGridSizer(0, 3, 12, 12);
+      for (const char* colour : {"#ffff00", "#ff00ff", "#00ffff", "#ff4040",
+                                  "#40d060", "#4080ff", "#ffffff", "#222222", "#ff9800"}) {
+        auto* swatch = new wxButton(&palette, wxID_ANY, colour);
+        swatch->SetName(colour);
+        swatch->Bind(wxEVT_BUTTON, [input, colour](wxCommandEvent&) { input->SetValue(colour); });
+        swatches->Add(swatch, 1, wxEXPAND);
+      }
+      root->Add(swatches, 0, wxEXPAND | wxALL, 16);
+      palette.SetSizer(root);
+      WR_StyleAndroidControls(&palette);
+      bool accepted = false;
+      auto* header = WR_AddAndroidDoneHeader(&palette, _("Route colour"),
+          [&palette]() { palette.EndModal(wxID_CANCEL); }, _("Cancel"));
+      auto* apply = new wxButton(header, wxID_ANY, _("Apply"));
+      apply->SetMinSize(wxSize(170, 72));
+      header->GetSizer()->Insert(1, apply, 0, wxALL, 8);
+      WR_StyleAndroidControls(header);
+      apply->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
+        const wxString value = input->GetValue();
+        if (value.size() != 7 || value[0] != '#' || !wxColour(value).IsOk()) {
+          instructions->SetLabel(_("Enter a valid colour, for example #4080FF."));
+          return;
+        }
+        picker->SetColour(wxColour(value));
+        accepted = true;
+        palette.EndModal(wxID_OK);
+      });
+      // wxQt button GetLabel() does not reliably return its displayed text.
+      // Retain the colour identity independently of the native caption.
+      for (auto* item : swatches->GetChildren()) {
+        auto* swatch = item->GetWindow();
+        const wxColour colour(swatch->GetName());
+        const bool dark = (colour.Red() * 299 + colour.Green() * 587 +
+                           colour.Blue() * 114) < 140000;
+        swatch->GetHandle()->setStyleSheet(QString(
+            "QPushButton { background-color: %1; color: %2; border: 2px solid #627784; "
+            "border-radius: 8px; min-height: 72px; font-size: 16pt; }")
+            .arg(QString::fromUtf8(swatch->GetName().utf8_str()))
+            .arg(dark ? "white" : "black"));
+      }
+      palette.SetSize(GetCanvasByIndex(0)->GetClientSize() - wxSize(24, 24));
+      palette.CentreOnParent();
+      palette.ShowModal();
+      if (accepted) {
+        button->SetLabel(picker->GetColour().GetAsString(wxC2S_HTML_SYNTAX));
+        SaveSettings();
+        OnUpdate();
+      }
+    });
+  }
+  WR_StyleAndroidControls(this);
+  auto* header = WR_AddAndroidDoneHeader(this, _("Routing settings"), [this]() {
+    for (auto* spin : GetHandle()->findChildren<QAbstractSpinBox*>())
+      spin->interpretText();
+    SaveSettings();
+    OnUpdate();
+    Hide();
+  });
+  wxButton* androidHelp = new wxButton(header, wxID_ANY, _("Help"));
+  androidHelp->SetMinSize(wxSize(120, 72));
+  androidHelp->Bind(wxEVT_BUTTON, [this](wxCommandEvent& event) {
+    OnHelp(event);
+  });
+  androidHelp->GetHandle()->setStyleSheet(
+      "QPushButton { font-size: 16pt; min-height: 62px; color: #173849; background: white; }");
+  header->GetSizer()->Insert(1, androidHelp, 0, wxALL, 8);
+  WR_AddAndroidBookPicker(this, book, 1);
+  WR_WrapAndroidText(threadsNote, threadsNote->GetLabel(), sz.x - 90);
   SetSize(0, 0, sz.x, sz.y - 40);
 #endif
 }
@@ -187,30 +677,164 @@ void SettingsDialog::SaveSettings() {
   pConf->Write(_T("AlternateRouteThickness"),
                m_sAlternateRouteThickness->GetValue());
   pConf->Write(_T("AlternatesForAll"), m_cbAlternatesForAll->GetValue());
-  // CursorOnRoute Customization
   pConf->Write(_T("CursorRoute"), m_cbDisplayCursorRoute->GetValue());
   pConf->Write(_T("MarkAtPolarChange"), m_cbMarkAtPolarChange->GetValue());
   pConf->Write(_T("DisplayWindBarbs"), m_cbDisplayWindBarbs->GetValue());
-  // WindBarbsOnRoute Customization
   pConf->Write(_T("WindBarbsOnRouteThickness"),
                m_sWindBarbsOnRouteThickness->GetValue());
   pConf->Write(_T("WindBarbsOnRouteApparent"),
                m_cbDisplayApparentWindBarbs->GetValue());
   pConf->Write(_T("DisplayComfortOnRoute"), m_cbDisplayComfort->GetValue());
   pConf->Write(_T("DisplayCurrent"), m_cbDisplayCurrent->GetValue());
-
   pConf->Write(_T("ConcurrentThreads"), m_sConcurrentThreads->GetValue());
 
   for (int i = 0; i < WeatherRouting::NUM_COLS; i++)
     pConf->Write(wxString::Format(_T("Column_") + _(column_names[i]), i),
                  m_cblFields->IsChecked(i));
 
-  pConf->Write(_T("UseLocalTime"), m_cbUseLocalTime->GetValue());
+  // Keep the legacy key synchronized so downgrades retain the user's choice.
+  pConf->Write(_T("UseLocalTime"), m_useLocalTimeZone);
+  pConf->Write(_T("UseLocalTimeZone"), m_useLocalTimeZone);
+  pConf->Write(_T("DisplayTimeZone"), m_displayTimeZone);
+
+#ifdef __WXMSW__
+  SaveMemorySettings();
+#endif
 
   wxPoint p = GetPosition();
   pConf->Write(_T ( "SettingsDialogX" ), p.x);
   pConf->Write(_T ( "SettingsDialogY" ), p.y);
 }
+
+#ifdef __WXMSW__
+AddressSpaceMonitor* SettingsDialog::GetMonitor() {
+  WeatherRouting* weatherRouting = dynamic_cast<WeatherRouting*>(GetParent());
+
+  if (!weatherRouting) {
+    wxLogWarning(
+        "SettingsDialog::GetMonitor() - GetParent() is not WeatherRouting");
+    return nullptr;
+  }
+
+  weather_routing_pi* plugin = &weatherRouting->GetPlugin();
+
+  if (!plugin) {
+    wxLogWarning(
+        "SettingsDialog::GetMonitor() - Could not get plugin reference from "
+        "WeatherRouting");
+    return nullptr;
+  }
+
+  wxLogMessage(
+      "SettingsDialog::GetMonitor() - Successfully got monitor reference");
+  return &plugin->GetAddressSpaceMonitor();
+}
+
+void SettingsDialog::LoadMemorySettings() {
+  wxFileConfig* pConf = GetOCPNConfigObject();
+  pConf->SetPath(_T( "/PlugIns/WeatherRouting" ));
+
+  double threshold = 80.0;
+  pConf->Read(_T("MemoryThreshold"), &threshold, 80.0);
+
+  bool suppressAlert = false;
+  pConf->Read(_T("MemorySuppressAlert"), &suppressAlert, false);
+
+  bool logUsage = false;
+  pConf->Read(_T("MemoryLogUsage"), &logUsage, false);
+
+  m_spinThreshold->SetValue(threshold);
+  m_checkSuppressAlert->SetValue(suppressAlert);
+  m_checkLogUsage->SetValue(logUsage);
+
+  // Apply to the global monitor
+  AddressSpaceMonitor* monitor = GetMonitor();
+  if (monitor && monitor->IsValid()) {
+    wxLogMessage(
+        "SettingsDialog::LoadMemorySettings() - Configuring monitor: "
+        "threshold=%.1f, suppressAlert=%d, logUsage=%d",
+        threshold, suppressAlert, logUsage);
+    monitor->SetThresholdPercent(threshold);
+    monitor->SetAlertEnabled(!suppressAlert);
+    monitor->SetLoggingEnabled(logUsage);
+    monitor->SetGauge(m_gaugeMemoryUsage);
+
+    // Create text label if it doesn't exist yet
+    if (!m_staticTextMemoryStats && m_usageSizer) {
+      wxWindow* parent = m_gaugeMemoryUsage->GetParent();
+      m_staticTextMemoryStats = new wxStaticText(
+          parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+      m_staticTextMemoryStats->SetMinSize(FromDIP(wxSize(300, 30)));
+      m_usageSizer->Add(m_staticTextMemoryStats, 0, wxALIGN_BOTTOM | wxLEFT,
+                        FromDIP(5));
+      m_usageSizer->Layout();
+      wxLogMessage("SettingsDialog: Created text label for monitor");
+    }
+
+    monitor->SetTextLabel(m_staticTextMemoryStats);
+
+    wxLogMessage(
+        "SettingsDialog::LoadMemorySettings() - Configuration complete");
+  } else {
+    wxLogError(
+        "SettingsDialog::LoadMemorySettings() - GetMonitor() returned NULL or "
+        "invalid!");
+  }
+}
+
+void SettingsDialog::SaveMemorySettings() {
+  wxFileConfig* pConf = GetOCPNConfigObject();
+  pConf->SetPath(_T( "/PlugIns/WeatherRouting" ));
+
+  pConf->Write(_T("MemoryThreshold"), m_spinThreshold->GetValue());
+  pConf->Write(_T("MemorySuppressAlert"), m_checkSuppressAlert->GetValue());
+  pConf->Write(_T("MemoryLogUsage"), m_checkLogUsage->GetValue());
+}
+
+void SettingsDialog::OnThresholdChanged(wxSpinDoubleEvent& event) {
+  AddressSpaceMonitor* monitor = GetMonitor();
+  if (!monitor) {
+    return;
+  }
+
+  double newThreshold = m_spinThreshold->GetValue();
+  monitor->SetThresholdPercent(newThreshold);
+
+  // Immediately check with new threshold
+  monitor->CheckAndAlert();
+}
+
+void SettingsDialog::OnSuppressAlertChanged(wxCommandEvent& event) {
+  AddressSpaceMonitor* monitor = GetMonitor();
+  if (!monitor) {
+    wxLogWarning(
+        "SettingsDialog::OnSuppressAlertChanged - No monitor available");
+    return;
+  }
+
+  if (m_checkSuppressAlert->GetValue()) {
+    monitor->DismissAlert();
+    wxLogMessage("SettingsDialog: User suppressed alerts via checkbox");
+  } else {
+    monitor->alertDismissed = false;
+    wxLogMessage("SettingsDialog: User re-enabled alerts via checkbox");
+    monitor->CheckAndAlert();
+  }
+
+  SaveMemorySettings();
+}
+
+void SettingsDialog::OnLogUsageChanged(wxCommandEvent& event) {
+  AddressSpaceMonitor* monitor = GetMonitor();
+  if (monitor) {
+    monitor->SetLoggingEnabled(m_checkLogUsage->GetValue());
+  }
+  SaveMemorySettings();
+}
+
+#endif
+
+// Platform-independent methods
 
 void SettingsDialog::OnUpdate() {
   WeatherRouting* weather_routing = dynamic_cast<WeatherRouting*>(GetParent());
@@ -220,6 +844,42 @@ void SettingsDialog::OnUpdate() {
 void SettingsDialog::OnUpdateColumns(wxCommandEvent& event) {
   WeatherRouting* weather_routing = dynamic_cast<WeatherRouting*>(GetParent());
   if (weather_routing) weather_routing->UpdateColumns();
+}
+
+void SettingsDialog::SetDisplayTimeZone(bool enabled,
+                                        const wxString& zoneName) {
+  m_useLocalTimeZone = enabled;
+  if (marine_time::IsTimeZoneAvailable(zoneName))
+    m_displayTimeZone = zoneName;
+  else if (!marine_time::IsTimeZoneAvailable(m_displayTimeZone))
+    m_displayTimeZone = "UTC";
+  SaveSettings();
+}
+
+wxString SettingsDialog::FormatTime(const wxDateTime& utc,
+                                    const wxString& format,
+                                    bool appendAbbreviation) const {
+  const wxString zone =
+      m_useLocalTimeZone ? m_displayTimeZone : wxString("UTC");
+  wxString displayFormat = format;
+#ifdef __OCPN__ANDROID__
+  // Android's locale expands %x to a date plus time on this wxQt build.
+  displayFormat.Replace("%x", "%Y-%m-%d");
+#endif
+  return marine_time::FormatInTimeZone(utc, displayFormat, zone,
+                                       appendAbbreviation);
+}
+
+wxDateTime SettingsDialog::ToDisplayWallClock(const wxDateTime& utc) const {
+  return marine_time::ToWallClock(
+      utc, m_useLocalTimeZone ? m_displayTimeZone : wxString("UTC"));
+}
+
+marine_time::WallClockConversion SettingsDialog::DisplayWallClockToUtc(
+    int year, int month, int day, int hour, int minute, int second) const {
+  return marine_time::FromWallClock(
+      year, month, day, hour, minute, second,
+      m_useLocalTimeZone ? m_displayTimeZone : wxString("UTC"));
 }
 
 void SettingsDialog::OnHelp(wxCommandEvent& event) {
@@ -250,7 +910,7 @@ Number of Concurrent Threads -- if there are multiple configurations, \
 they can be computed in separate threads which allows a speedup \
 if there are multiple processors\n");
 
-  wxMessageDialog mdlg(this, mes, _("Weather Routing"),
+  WR_MessageDialog mdlg(this, mes, _("Weather Routing"),
                        wxOK | wxICON_INFORMATION);
   mdlg.ShowModal();
 }

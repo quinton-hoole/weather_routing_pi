@@ -29,6 +29,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <iostream>
 #include <cmath>
+#include <string>
+#include <cstring>  // memcpy
+#include <utility>  // std::swap
+#include <cstddef>
+#include <cstdint>
+#include <ctime>
+#include <limits>
 
 #define DEBUG_INFO false
 #define DEBUG_ERROR true
@@ -126,20 +133,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define LV_SIGMA 107
 #define LV_ATMOS_ENT 10
 #define LV_ATMOS_ALL 200
-//---------------------------------------------------------
-enum DataCenterModel {
-  NOAA_GFS,
-  NOAA_NCEP_WW3,
-  NOAA_NCEP_SST,
-  NOAA_RTOFS,
-  FNMOC_WW3_GLB,
-  FNMOC_WW3_MED,
-  NORWAY_METNO,
-  ECMWF_ERA5,
-  KNMI_HIRLAM,
-  KNMI_HARMONIE_AROME,
-  OTHER_DATA_CENTER
-};
+    //---------------------------------------------------------
+    enum DataCenterModel {
+      NOAA_GFS,
+      NOAA_NCEP_WW3,
+      NOAA_NCEP_SST,
+      NOAA_RTOFS,
+      FNMOC_WW3_GLB,
+      FNMOC_WW3_MED,
+      NORWAY_METNO,
+      ECMWF_ERA5,
+      KNMI_HIRLAM,
+      KNMI_HARMONIE_AROME,
+      OTHER_DATA_CENTER
+    };
 
 //----------------------------------------------
 class GribCode {
@@ -166,26 +173,39 @@ public:
  * - Origin point (La1, Lo1) and end point (La2, Lo2)
  * - Number of points in each direction (Ni, Nj)
  * - Grid spacing (Di, Dj)
- * - Data array of size Ni Ã— Nj containing values at each grid point
+ * - Data array of size Ni × Nj containing values at each grid point
  *
  * Features:
  * - Provides spatial interpolation for points between grid points.
  * - Handles vector fields (e.g., wind, currents) with special interpolation
  *   for magnitude and direction.
- * - Supports bitmap sections for irregular data coverage.
  * - Can be created from file data or generated through temporal/spatial
  *   interpolation.
  * - Derived quantities like wind speed from U/V components.
  * - Unit conversions and statistical calculations.
  *
  */
+
+
 class GribRecord {
 public:
+  /** Default constructor initializes members to safe defaults. */
+  GribRecord();
+
   /** Copy constructor performs a deep copy of the GribRecord. */
   GribRecord(const GribRecord& rec);
-  GribRecord() { m_bfilled = false; }
+  GribRecord(GribRecord&& other) noexcept;
 
   virtual ~GribRecord();
+
+  /** Copy assignment - deep copy, exception safe. */
+  GribRecord& operator=(const GribRecord& rec);
+
+  /** Move assignment. */
+  GribRecord& operator=(GribRecord&& other) noexcept;
+
+  /** Swap helper */
+  void swap(GribRecord& other) noexcept;
 
   /**
    * Creates a new GribRecord by temporally interpolating between two time
@@ -199,7 +219,7 @@ public:
    * The interpolation is done value-by-value across the entire grid using:
    * - Linear interpolation for scalar values
    * - Angular interpolation for directional values (when dir=true)
-   *   to properly handle the 0Â°/360Â° wrapping
+   *   to properly handle the 0°/360° wrapping
    *
    * @param rec1 GribRecord at earlier time t1
    * @param rec2 GribRecord at later time t2
@@ -221,7 +241,6 @@ public:
   static GribRecord* InterpolatedRecord(const GribRecord& rec1,
                                         const GribRecord& rec2, double d,
                                         bool dir = false);
-
   /**
    * Creates temporally interpolated records for vector fields (wind, currents).
    *
@@ -294,7 +313,6 @@ public:
    * @return Parameter type identifier as unsigned char
    *
    * @see The full list of parameter codes is defined at the top of GribRecord.h
-   * @note Parameter definitions can vary between GRIB1 and GRIB2 formats
    */
   zuchar getDataType() const { return dataType; }
   void setDataType(const zuchar t);
@@ -358,7 +376,7 @@ public:
    * - 34: Japanese Meteorological Agency (JMA)
    * - 58: European Centre for Medium-Range Weather Forecasts (ECMWF)
    * - 59: German Weather Service (DWD)
-   * - 85: French Weather Service (MÃ©tÃ©o-France)
+   * - 85: French Weather Service (Météo-France)
    *
    * @return Center identification code as defined in GRIB Table 0
    */
@@ -478,10 +496,10 @@ public:
    * @return Data value at grid point (i,j)
    * @note No bounds checking is performed
    */
-  double getValue(int i, int j) const { return data[j * Ni + i]; }
+  double getValue(int i, int j) const { return data[std::size_t(j) * Ni + i]; }
 
   void setValue(zuint i, zuint j, double v) {
-    if (i < Ni && j < Nj) data[j * Ni + i] = v;
+    if (data && i < Ni && j < Nj) data[std::size_t(j) * Ni + i] = v;
   }
 
   /**
@@ -506,9 +524,7 @@ public:
    * latitude/longitude point.
    *
    * Takes X and Y component records and interpolates both magnitude and angle
-   * using bilinear interpolation between grid points. It handles cases where
-   * the requested point might cross the date line by adjusting the longitude if
-   * needed.
+   * using bilinear interpolation between grid points.
    *
    * @param M [out] Vector magnitude at the interpolated point (preserves input
    * units). This is the speed or strength of the wind/current, typically
@@ -523,8 +539,6 @@ public:
    * @param py [in] Latitude in degrees of the interpolation point.
    * @param numericalInterpolation If true, uses bilinear interpolation; if
    * false, uses nearest neighbor interpolation.
-   * @return true if interpolation was successful, false if the point is outside
-   * map boundaries or if insufficient valid data points exist for interpolation
    *
    * @note The method expects the input components to follow meteorological
    * conventions where u is positive eastward and v is positive northward
@@ -585,7 +599,7 @@ public:
   time_t getRecordRefDate() const { return refDate; }
   const char* getStrRecordRefDate() const { return strRefDate; }
 
-  // Date courante des prÃ©visions
+  // Date courante des prévisions
   time_t getRecordCurrentDate() const { return curDate; }
   const char* getStrRecordCurDate() const { return strCurDate; }
   void setRecordCurrentDate(time_t t);
@@ -600,6 +614,36 @@ private:
   inline bool isYInMap(double y) const;
 
 protected:
+  // No new data members or virtual functions: preserve the shared GRIB ABI.
+  void copyMetadata(const GribRecord& rec);
+  std::size_t dataCount() const {
+    // A widened multiply avoids division in the chart-sampling hot path.
+    const std::uint64_t count = std::uint64_t(Ni) * Nj;
+    return count && count <= std::uint64_t(std::numeric_limits<int>::max()) &&
+           count <= std::numeric_limits<std::size_t>::max() / sizeof(double)
+               ? static_cast<std::size_t>(count) : 0;
+  }
+  bool validGrid() const {
+    return data && dataCount() && std::isfinite(Di) && std::isfinite(Dj) &&
+           Di != 0 && Dj != 0 && std::isfinite(La1) && std::isfinite(La2) &&
+           std::isfinite(Lo1) && std::isfinite(Lo2);
+  }
+  bool sameGrid(const GribRecord& other) const {
+    return Ni == other.Ni && Nj == other.Nj && Di == other.Di && Dj == other.Dj &&
+           Lo1 == other.Lo1 && La1 == other.La1 &&
+           Lo2 == other.Lo2 && La2 == other.La2;
+  }
+  static bool GetSpatialInterpolationGrid(
+      const GribRecord &rec1, const GribRecord &rec2, double &La1,
+      double &Lo1, double &La2, double &Lo2, double &Di, double &Dj, int &Ni,
+      int &Nj);
+  static GribRecord *SpatiallyInterpolatedRecord(const GribRecord &rec1,
+                                                  const GribRecord &rec2,
+                                                  double d, bool dir);
+  static GribRecord *SpatiallyInterpolated2DRecord(
+      GribRecord *&rety, const GribRecord &rec1x, const GribRecord &rec1y,
+      const GribRecord &rec2x, const GribRecord &rec2y, double d);
+
   // private:
   static bool GetInterpolatedParameters(const GribRecord& rec1,
                                         const GribRecord& rec2, double& La1,
@@ -724,6 +768,7 @@ protected:
    * Specifies when the forecast model was initialized.
    */
   zuint refyear, refmonth, refday, refhour, refminute;
+  // zuchar periodP1, periodP2;
   /**
    * Time range indicators for this forecast step.
    * Used to calculate the valid time period for this data.
@@ -778,38 +823,28 @@ protected:
 
 //==========================================================================
 inline bool GribRecord::hasValue(int i, int j) const {
-  // is data present in BMS ?
-  if (!hasBMS) {
-    return true;
-  }
-  int bit;
-  if (isAdjacentI) {
-    bit = j * Ni + i;
-  } else {
-    bit = i * Nj + j;
-  }
-  zuchar c = BMSbits[bit / 8];
-  zuchar m = (zuchar)128 >> (bit % 8);
-  return (m & c) != 0;
+  if (i < 0 || j < 0 || static_cast<zuint>(i) >= Ni ||
+      static_cast<zuint>(j) >= Nj || !data) return false;
+  if (!hasBMS) return true;
+  const std::size_t bit = isAdjacentI ? std::size_t(j) * Ni + i
+                                    : std::size_t(i) * Nj + j;
+  if (!BMSbits || bit / 8 >= BMSsize) return false;
+  return (BMSbits[bit / 8] & (128u >> (bit % 8))) != 0;
 }
 
 //-----------------------------------------------------------------
 inline bool GribRecord::isPointInMap(double x, double y) const {
   return isXInMap(x) && isYInMap(y);
+  /*    if (Dj < 0)
+          return x>=Lo1 && y<=La1 && x<=Lo1+(Ni-1)*Di && y>=La1+(Nj-1)*Dj;
+      else
+          return x>=Lo1 && y>=La1 && x<=Lo1+(Ni-1)*Di && y<=La1+(Nj-1)*Dj;*/
 }
 //-----------------------------------------------------------------
 inline bool GribRecord::isXInMap(double x) const {
-  if (Di > 0) {
-    double maxLo = Lo2;
-    if (Lo2 + Di >= 360) /* grib that covers the whole world */
-      maxLo += Di;
-    return x >= Lo1 && x <= maxLo;
-  } else {
-    double maxLo = Lo1;
-    if (Lo2 + Di >= 360) /* grib that covers the whole world */
-      maxLo += Di;
-    return x >= Lo2 && x <= maxLo;
-  }
+  const bool wraps = std::abs(std::abs(Di) * Ni - 360.0) <= 1e-7;
+  return Di > 0 ? x >= Lo1 && x <= Lo2 + (wraps ? Di : 0)
+                : x <= Lo1 && x >= Lo2 + (wraps ? Di : 0);
 }
 //-----------------------------------------------------------------
 inline bool GribRecord::isYInMap(double y) const {

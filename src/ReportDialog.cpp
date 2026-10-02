@@ -16,6 +16,7 @@
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  **************************************************************************/
+#include "WeatherRoutingMessageDialog.h"
 #include <cstdint>
 
 #include <wx/wx.h>
@@ -34,6 +35,11 @@
 #include "RouteMapOverlay.h"
 
 #include "WeatherRouting.h"
+#include "AndroidDialogHeader.h"
+#ifdef __OCPN__ANDROID__
+#include <QTextBrowser>
+#include <QVBoxLayout>
+#endif
 
 ReportDialog::ReportDialog(WeatherRouting& weatherrouting)
 #ifndef __WXOSX__
@@ -46,10 +52,62 @@ ReportDialog::ReportDialog(WeatherRouting& weatherrouting)
 #endif
       m_WeatherRouting(weatherrouting) {
   m_bReportStale = true;
-  SetRouteMapOverlays(std::list<RouteMapOverlay*>());
 #ifdef __OCPN__ANDROID__
+  SetBackgroundColour(wxColour(233, 238, 241));
+  GetHandle()->setAutoFillBackground(true);
+  // wxHtmlWindow's painted scroll surface leaves stale text on wxQt. Use
+  // Qt's document viewport, with one report per full-height touch page.
+  m_bInformation->GetContainingSizer()->Detach(m_bInformation);
+  for (auto* child : GetChildren()) child->Hide();
+  SetSizer(new wxBoxSizer(wxVERTICAL));
+  auto* book = new wxNotebook(this, wxID_ANY);
+  auto makeReport = [book](const wxString& title) {
+    auto* panel = new wxPanel(book, wxID_ANY);
+    auto* layout = new QVBoxLayout(panel->GetHandle());
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto* text = new QTextBrowser(panel->GetHandle());
+    text->setStyleSheet("QTextBrowser { font-size: 17pt; padding: 16px; "
+                        "color: #173849; background: white; border: none; }");
+    text->setTextInteractionFlags(Qt::NoTextInteraction);
+    QScroller::grabGesture(text->viewport(), QScroller::TouchGesture);
+    layout->addWidget(text);
+    book->AddPage(panel, title);
+    return text;
+  };
+  m_androidConfigurationReport = makeReport(_("Selected routes"));
+  m_androidRoutesReport = makeReport(_("All routes"));
+  GetSizer()->Add(book, 1, wxEXPAND);
+  WR_AddAndroidBookPicker(this, book);
+  m_bClose->Hide();
+  WR_StyleAndroidControls(this);
+  wxPanel* header = WR_AddAndroidDoneHeader(this, _("Routing report"));
+  m_bInformation->Reparent(header);
+  m_bInformation->Show();
+  m_bInformation->SetMinSize(wxSize(200, 72));
+  header->GetSizer()->Add(m_bInformation, 0, wxALL, 5);
   wxSize sz = ::wxGetDisplaySize();
   SetSize(0, 0, sz.x, sz.y - 40);
+#endif
+  SetRouteMapOverlays(std::list<RouteMapOverlay*>());
+}
+
+void ReportDialog::SetConfigurationReportHTML(const wxString& html) {
+#ifdef __OCPN__ANDROID__
+  wxString page = html;
+  page.Replace("<dt>", "<br>");
+  m_androidConfigurationReport->setHtml(QString::fromUtf8(page.ToUTF8().data()));
+#else
+  m_htmlConfigurationReport->SetPage(html);
+#endif
+}
+
+void ReportDialog::SetRoutesReportHTML(const wxString& html) {
+#ifdef __OCPN__ANDROID__
+  wxString page = html;
+  page.Replace("<dt>", "<br>");
+  m_androidRoutesReport->setHtml(QString::fromUtf8(page.ToUTF8().data()));
+#else
+  m_htmlRoutesReport->SetPage(html);
 #endif
 }
 
@@ -58,7 +116,7 @@ void ReportDialog::SetRouteMapOverlays(
   GenerateRoutesReport();
 
   if (routemapoverlays.empty()) {
-    m_htmlConfigurationReport->SetPage(_("No Configuration selected."));
+    SetConfigurationReportHTML(_("No Configuration selected."));
     return;
   }
 
@@ -67,7 +125,7 @@ void ReportDialog::SetRouteMapOverlays(
        it != routemapoverlays.end(); it++) {
     page += _T("<p>");
     if (!(*it)->ReachedDestination()) {
-      m_htmlConfigurationReport->SetPage(_("Destination not yet reached."));
+      page += _("Destination not yet reached.") + _T("<br>");
       continue;
     }
 
@@ -120,10 +178,11 @@ void ReportDialog::SetRouteMapOverlays(
             _T(" ") + _("knots") + _T("<dt>");
     ;
 
+    const double averageSwell = (*it)->RouteInfo(RouteMapOverlay::AVGSWELL);
     page += _("Average Swell") + wxString(_T(": ")) +
-            wxString::Format(_T(" %.1f"),
-                             (*it)->RouteInfo(RouteMapOverlay::AVGSWELL)) +
-            _T(" ") + _("meters") + _T("<dt>");
+            (std::isfinite(averageSwell)
+                 ? wxString::Format(_T("%.1f "), averageSwell) + _("meters")
+                 : _("Unavailable")) + _T("<dt>");
     page +=
         _("Upwind") + wxString(_T(": ")) +
         wxString::Format(_T(" %.1f%%"),
@@ -132,7 +191,7 @@ void ReportDialog::SetRouteMapOverlays(
     double port_starboard = (*it)->RouteInfo(RouteMapOverlay::PORT_STARBOARD);
     page += _("Port/Starboard") + wxString(_T(": ")) +
             (std::isnan(port_starboard)
-                 ? _T("nan")
+                 ? wxString(_T("nan"))
                  : wxString::Format(_T("%d/%d"), (int)port_starboard,
                                     100 - (int)port_starboard)) +
             _T("<dt>");
@@ -170,26 +229,12 @@ void ReportDialog::SetRouteMapOverlays(
     }
   }
 
-  m_htmlConfigurationReport->SetPage(page);
-}
-
-wxDateTime ReportDialog::DisplayedTime(wxDateTime t) {
-  wxDateTime display_time = t;
-  if (m_WeatherRouting.m_SettingsDialog.m_cbUseLocalTime->GetValue())
-    display_time = t.FromUTC();
-  return display_time;
+  SetConfigurationReportHTML(page);
 }
 
 wxString ReportDialog::FormatTime(wxDateTime t) {
-  wxString r = DisplayedTime(t).Format(_T("%x %X"));
-#if 0
-    // XXX add this?
-    if(m_WeatherRouting.m_SettingsDialog.m_cbUseLocalTime->GetValue())
-        r += _(" (local)");
-    else
-        r += _T(" (UTC)");
-#endif
-  return r;
+  return m_WeatherRouting.m_SettingsDialog.FormatTime(t,
+                                                      _T("%Y-%m-%d %H:%M"));
 }
 
 void ReportDialog::GenerateRoutesReport() {
@@ -213,7 +258,7 @@ void ReportDialog::GenerateRoutesReport() {
   }
 
   if (routes.size() == 0) {
-    m_htmlRoutesReport->SetPage(_("No routes to report yet."));
+    SetRoutesReportHTML(_("No routes to report yet."));
     return;
   }
 
@@ -295,8 +340,8 @@ void ReportDialog::GenerateRoutesReport() {
         if (it == sort_by_start.end()) break;
 
         RouteMapOverlay* r = it->second;
-        wxDateTime s = DisplayedTime(r->StartTime());
-        wxDateTime e = DisplayedTime(r->EndTime());
+        wxDateTime s = r->StartTime();
+        wxDateTime e = r->EndTime();
         // merge downwind
         for (; it != sort_by_start.end(); it++) {
           RouteMapOverlay* r = it->second;
@@ -309,7 +354,11 @@ void ReportDialog::GenerateRoutesReport() {
           first_print = false;
         else
           page += _(" and ");
-        page += s.Format(_T("%d %B ")) + _("to") + e.Format(_T(" %d %B"));
+        page += m_WeatherRouting.m_SettingsDialog.FormatTime(
+                    s, _T("%d %B "), false) +
+                _("to") +
+                m_WeatherRouting.m_SettingsDialog.FormatTime(
+                    e, _T(" %d %B"), false);
       }
     }
 
@@ -403,7 +452,8 @@ void ReportDialog::GenerateRoutesReport() {
         if (!*it2) continue;
         if (!first) page += _(" and ");
         first = false;
-        page += DisplayedTime((*it2)->StartTime()).Format(_T("%x"));
+        page += m_WeatherRouting.m_SettingsDialog.FormatTime(
+            (*it2)->StartTime(), _T("%x"), false);
 
         if (++it2 == cyclone_safe_routes.end()) break;
 
@@ -412,13 +462,15 @@ void ReportDialog::GenerateRoutesReport() {
         while (*it2 && ++it2 != cyclone_safe_routes.end());
 
         it2--;
-        page += _(" to ") + DisplayedTime((*it2)->StartTime()).Format(_T("%x"));
+        page += _(" to ") +
+                m_WeatherRouting.m_SettingsDialog.FormatTime(
+                    (*it2)->StartTime(), _T("%x"), false);
       }
     }
   cyclonesfailed:;
   }
 
-  m_htmlRoutesReport->SetPage(page);
+  SetRoutesReportHTML(page);
 }
 
 void ReportDialog::OnInformation(wxCommandEvent& event) {
@@ -435,7 +487,7 @@ void ReportDialog::OnInformation(wxCommandEvent& event) {
   expected speed, and weather conditions. If climatology is available, \
   cyclone risk and additional weather conditions may be described.");
 
-  wxMessageDialog mdlg(this, mes, _("Weather Routing Report"),
+  WR_MessageDialog mdlg(this, mes, _("Weather Routing Report"),
                        wxOK | wxICON_INFORMATION);
   mdlg.ShowModal();
 }
